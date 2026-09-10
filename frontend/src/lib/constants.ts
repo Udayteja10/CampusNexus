@@ -38,6 +38,21 @@ export const ROUTES = {
   POST_EDIT: (id: string) => `/community/post/${id}/edit`,
 
   // Academic
+  ACADEMIC: "/academic",
+  ACADEMIC_DASHBOARD: "/academic",
+  ACADEMIC_RESOURCES: "/academic/resources",
+  ACADEMIC_RESOURCE_DETAIL: (id: string) => `/academic/resources/${id}`,
+  ACADEMIC_SUBJECTS: "/academic/subjects",
+  ACADEMIC_SUBJECT_DETAIL: (id: string) => `/academic/subjects/${id}`,
+  ACADEMIC_STUDY_GROUPS: "/academic/study-groups",
+  ACADEMIC_STUDY_GROUP_DETAIL: (id: string) => `/academic/study-groups/${id}`,
+  ACADEMIC_FACULTY: "/academic/faculty",
+  ACADEMIC_FACULTY_DETAIL: (id: string) => `/academic/faculty/${id}`,
+  ACADEMIC_REQUESTS: "/academic/requests",
+  ACADEMIC_CALENDAR: "/academic/calendar",
+  ACADEMIC_WIKI: "/academic/wiki",
+
+  // Legacy Academic aliases (redirected)
   RESOURCES: "/resources",
   FACULTY: "/faculty",
   STUDY_GROUPS: "/resources/study-groups",

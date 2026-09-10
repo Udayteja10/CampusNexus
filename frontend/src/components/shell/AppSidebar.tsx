@@ -66,8 +66,14 @@ const studentNav: NavGroup[] = [
   {
     label: "Academic",
     items: [
-      { href: ROUTES.RESOURCES, label: "Resources", icon: BookOpen },
-      { href: ROUTES.FACULTY, label: "Faculty", icon: Users },
+      { href: ROUTES.ACADEMIC, label: "Academic Hub", icon: GraduationCap, exact: true },
+      { href: ROUTES.ACADEMIC_RESOURCES, label: "Resources & PYQs", icon: BookOpen },
+      { href: ROUTES.ACADEMIC_SUBJECTS, label: "Subjects", icon: FileText },
+      { href: ROUTES.ACADEMIC_STUDY_GROUPS, label: "Study Groups", icon: Users },
+      { href: ROUTES.ACADEMIC_FACULTY, label: "Faculty Directory", icon: Building2 },
+      { href: ROUTES.ACADEMIC_REQUESTS, label: "Resource Requests", icon: HelpCircle },
+      { href: ROUTES.ACADEMIC_CALENDAR, label: "Academic Calendar", icon: CalendarDays },
+      { href: ROUTES.ACADEMIC_WIKI, label: "Campus Wiki", icon: Star },
     ],
   },
   {

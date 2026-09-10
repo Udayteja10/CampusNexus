@@ -21,6 +21,17 @@ export interface ClubLeaderPermission {
   clubName: string;
 }
 
+/**
+ * Scoped coordinator permission — attached to a STUDENT.
+ * Does NOT create a new authentication role.
+ * Only ADMIN can assign/remove this permission.
+ */
+export interface DeptCoordinatorPermission {
+  /** Department slug (e.g. "cse", "ece") — matches Department.id from departments.ts */
+  departmentId: string;
+  departmentName: string;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -36,6 +47,8 @@ export interface User {
   followingCount: number;
   badges: UserBadge[];
   clubLeaderOf: ClubLeaderPermission[];
+  /** Scoped coordinator permissions — student only, does NOT change auth role */
+  deptCoordinatorOf?: DeptCoordinatorPermission[];
   createdAt: string;
 }
 
