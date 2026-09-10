@@ -7,41 +7,52 @@ export const APP_VERSION = "1.0.0";
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 export const ROUTES = {
+  // Public / Landing
+  HOME: "/",
+
   // Auth
   LOGIN: "/login",
   REGISTER: "/register",
+  FORGOT_PASSWORD: "/forgot-password",
+  VERIFY_EMAIL: "/verify-email",
 
-  // Community
-  FEED: "/feed",
-  CHANNELS: "/channels",
-  MESSAGES: "/messages",
+  // Legal
+  TERMS: "/terms",
+  PRIVACY: "/privacy",
 
-  // Academic
-  RESOURCES: "/academic/resources",
-  RESOURCE_REQUESTS: "/academic/resource-requests",
-  STUDY_GROUPS: "/academic/study-groups",
-  FACULTY: "/academic/faculty",
-  WIKI: "/academic/wiki",
-
-  // Career
-  PLACEMENT: "/career/placement",
-  INTERNSHIP: "/career/internship",
-  RESUME_REVIEW: "/career/resume-review",
-  SMART_COLLECTIONS: "/career/smart-collections",
-
-  // Campus Life
-  CLUBS: "/campus/clubs",
-  EVENTS: "/campus/events",
-  CALENDAR: "/campus/calendar",
-  MARKETPLACE: "/campus/marketplace",
-  LOST_FOUND: "/campus/lost-found",
-  MEMES: "/campus/memes",
-
-  // User
+  // App core
+  DASHBOARD: "/dashboard",
+  PROFILE: (username: string) => `/profile/${username}`,
   NOTIFICATIONS: "/notifications",
   SEARCH: "/search",
-  PROFILE: (username: string) => `/profile/${username}`,
-  HELP: "/help",
+  SETTINGS: "/settings",
+  HELP: "/help-support",
+
+  // Community
+  COMMUNITY: "/community",
+  FEED: "/community/feed",
+  CHANNELS: "/community/channels",
+  MESSAGES: "/community/messages",
+  CREATE_POST: "/community/create",
+  POST_DETAIL: (id: string) => `/community/post/${id}`,
+  POST_EDIT: (id: string) => `/community/post/${id}/edit`,
+
+  // Academic
+  RESOURCES: "/resources",
+  FACULTY: "/faculty",
+  STUDY_GROUPS: "/resources/study-groups",
+  WIKI: "/resources/wiki",
+
+  // Career
+  PLACEMENTS: "/placements",
+  INTERNSHIPS: "/internships",
+  RESUME_REVIEW: "/resume-review",
+
+  // Campus Life
+  CLUBS: "/clubs",
+  EVENTS: "/events",
+  MARKETPLACE: "/marketplace",
+  LOST_FOUND: "/lost-found",
 
   // Moderator
   MOD_REPORTS: "/moderation/reports",
@@ -54,15 +65,24 @@ export const ROUTES = {
   ADMIN_FACULTY: "/admin/faculty",
   ADMIN_DEPARTMENTS: "/admin/departments",
   ADMIN_CLUBS: "/admin/clubs",
-  ADMIN_CHANNELS: "/admin/channels",
   ADMIN_EVENTS: "/admin/events",
-  ADMIN_CALENDAR: "/admin/calendar",
   ADMIN_ANNOUNCEMENTS: "/admin/announcements",
   ADMIN_BADGES: "/admin/badges",
   ADMIN_REPORTS: "/admin/reports",
   ADMIN_SUPPORT: "/admin/support",
   ADMIN_SETTINGS: "/admin/settings",
 } as const;
+
+// Routes that do NOT require authentication
+export const PUBLIC_ROUTES = new Set([
+  "/",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/verify-email",
+  "/terms",
+  "/privacy",
+]);
 
 // ─── User Roles ───────────────────────────────────────────────────────────────
 

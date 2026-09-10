@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthHydrator } from "@/components/auth/AuthHydrator";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -34,11 +35,13 @@ export default function RootLayout({
       <body className="min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
+          enableSystem={false}
           disableTransitionOnChange={false}
         >
           <TooltipProvider delay={300}>
+            {/* Hydrate persisted auth session from storage */}
+            <AuthHydrator />
             {children}
           </TooltipProvider>
         </ThemeProvider>
