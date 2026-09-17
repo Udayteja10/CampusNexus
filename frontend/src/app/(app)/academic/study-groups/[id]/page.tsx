@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -9,15 +9,15 @@ import {
   Calendar,
   Video,
   Share2,
-  Lock,
-  Globe,
   UserPlus,
   UserMinus,
   MessageSquare,
   Send,
   AlertTriangle,
   Crown,
-  Sparkles,
+  MoreVertical,
+  Trash2,
+  Ban,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { academicService, AcademicAccessError } from "@/services/academic";
@@ -32,6 +32,144 @@ import { DeptBadge } from "@/components/academic/DeptBadge";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
+// ─── Chat Message Types ──────────────────────────────────────────────────────
+
+/**
+ * Chat message data model — designed for future backend compatibility.
+ * - `deletedForEveryone`: globally marks the message as unsent (author only).
+ * - Per-user "delete for me" is tracked separately via a deletedForMe map.
+ */
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: string; // ISO string
+  deletedForEveryone: boolean;
+}
+
+// ─── localStorage Helpers ────────────────────────────────────────────────────
+
+const CHAT_STORAGE_PREFIX = "cn_sg_chat_";
+const CHAT_DELETED_PREFIX = "cn_sg_deleted_for_me_";
+
+function getChatStorageKey(groupId: string) {
+  return `${CHAT_STORAGE_PREFIX}${groupId}`;
+}
+
+function getDeletedForMeKey(groupId: string) {
+  return `${CHAT_DELETED_PREFIX}${groupId}`;
+}
+
+function loadMessages(groupId: string): ChatMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getChatStorageKey(groupId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMessages(groupId: string, messages: ChatMessage[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getChatStorageKey(groupId), JSON.stringify(messages));
+  } catch (err) {
+    console.error("Failed to save chat messages:", err);
+  }
+}
+
+function loadDeletedForMe(groupId: string, userId: string): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const key = getDeletedForMeKey(groupId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set();
+    const map: Record<string, string[]> = JSON.parse(raw);
+    return new Set(map[userId] || []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDeletedForMe(groupId: string, userId: string, deletedIds: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = getDeletedForMeKey(groupId);
+    const raw = localStorage.getItem(key);
+    const map: Record<string, string[]> = raw ? JSON.parse(raw) : {};
+    map[userId] = Array.from(deletedIds);
+    localStorage.setItem(key, JSON.stringify(map));
+  } catch (err) {
+    console.error("Failed to save deleted-for-me state:", err);
+  }
+}
+
+// ─── Seed Messages (created once) ────────────────────────────────────────────
+
+const SEED_CHAT_SENTINEL_PREFIX = "cn_sg_chat_seeded_";
+
+function ensureSeedMessages(groupId: string): ChatMessage[] {
+  const sentinelKey = `${SEED_CHAT_SENTINEL_PREFIX}${groupId}`;
+  const existing = loadMessages(groupId);
+
+  if (typeof window !== "undefined" && !localStorage.getItem(sentinelKey)) {
+    const seedMessages: ChatMessage[] = [
+      {
+        id: `seed-msg-${groupId}-1`,
+        senderId: "user-std-101",
+        senderName: "K. Rohit Reddy",
+        text: "Welcome everyone! We will be solving Units 1 & 2 PYQ questions tomorrow.",
+        timestamp: new Date(Date.now() - 86400000).toISOString(),
+        deletedForEveryone: false,
+      },
+      {
+        id: `seed-msg-${groupId}-2`,
+        senderId: "user-std-102",
+        senderName: "Sneha Varma",
+        text: "I have shared the BCNF decomposition examples in the resources tab.",
+        timestamp: new Date(Date.now() - 3600000).toISOString(),
+        deletedForEveryone: false,
+      },
+    ];
+    const merged = [...seedMessages, ...existing];
+    saveMessages(groupId, merged);
+    localStorage.setItem(sentinelKey, "true");
+    return merged;
+  }
+
+  return existing;
+}
+
+// ─── Format timestamp ────────────────────────────────────────────────────────
+
+function formatMessageTime(iso: string): string {
+  try {
+    const date = new Date(iso);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+
+    if (diffMin < 1) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    const timeStr = date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+    if (isToday) return `Today @ ${timeStr}`;
+    if (isYesterday) return `Yesterday @ ${timeStr}`;
+    return `${date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} @ ${timeStr}`;
+  } catch {
+    return "Unknown time";
+  }
+}
+
+// ─── Page Component ──────────────────────────────────────────────────────────
+
 export default function StudyGroupDetailPage() {
   const params = useParams();
   const groupId = params?.id as string;
@@ -41,26 +179,23 @@ export default function StudyGroupDetailPage() {
   const [members, setMembers] = useState<StudyGroupMember[]>([]);
   const [isMember, setIsMember] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
-  const [messages, setMessages] = useState<
-    { id: string; sender: string; text: string; time: string; isSelf: boolean }[]
-  >([
-    {
-      id: "m1",
-      sender: "K. Rohit Reddy",
-      text: "Welcome everyone! We will be solving Units 1 & 2 PYQ questions tomorrow.",
-      time: "Yesterday @ 6:30 PM",
-      isSelf: false,
-    },
-    {
-      id: "m2",
-      sender: "Sneha Varma",
-      text: "I have shared the BCNF decomposition examples in the resources tab.",
-      time: "Today @ 11:15 AM",
-      isSelf: false,
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [deletedForMe, setDeletedForMe] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [unsendConfirmId, setUnsendConfirmId] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Load chat messages from localStorage
+  const loadChatMessages = useCallback(() => {
+    if (!groupId) return;
+    const msgs = ensureSeedMessages(groupId);
+    setMessages(msgs);
+    if (user) {
+      setDeletedForMe(loadDeletedForMe(groupId, user.id));
+    }
+  }, [groupId, user]);
 
   const loadData = async () => {
     if (!groupId) return;
@@ -79,11 +214,11 @@ export default function StudyGroupDetailPage() {
       ]);
       setMembers(mList);
       setIsMember(joined);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof AcademicAccessError) {
         setAccessError(err.message);
       } else {
-        setAccessError(err.message || "Failed to load study group.");
+        setAccessError(err instanceof Error ? err.message : "Failed to load study group.");
       }
     } finally {
       setLoading(false);
@@ -92,7 +227,25 @@ export default function StudyGroupDetailPage() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId, user?.department]);
+
+  useEffect(() => {
+    loadChatMessages();
+  }, [loadChatMessages]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, deletedForMe]);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!activeMenu) return;
+    const handler = () => setActiveMenu(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [activeMenu]);
 
   const handleToggleJoin = async () => {
     if (!group) return;
@@ -125,25 +278,58 @@ export default function StudyGroupDetailPage() {
         );
         toast.success("Joined study group!");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update membership");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update membership");
     }
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatMessage.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `msg-${Date.now()}`,
-        sender: user?.fullName || user?.username || "You",
-        text: chatMessage.trim(),
-        time: "Just now",
-        isSelf: true,
-      },
-    ]);
+    if (!chatMessage.trim() || !user || !groupId) return;
+
+    const newMsg: ChatMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      senderId: user.id,
+      senderName: user.fullName || user.username,
+      text: chatMessage.trim(),
+      timestamp: new Date().toISOString(),
+      deletedForEveryone: false,
+    };
+
+    const updated = [...messages, newMsg];
+    setMessages(updated);
+    saveMessages(groupId, updated);
     setChatMessage("");
+  };
+
+  const handleDeleteForMe = (messageId: string) => {
+    if (!user || !groupId) return;
+    const updated = new Set(deletedForMe);
+    updated.add(messageId);
+    setDeletedForMe(updated);
+    saveDeletedForMe(groupId, user.id, updated);
+    setActiveMenu(null);
+    toast.success("Message hidden for you.");
+  };
+
+  const handleUnsendForEveryone = (messageId: string) => {
+    if (!user || !groupId) return;
+
+    // Verify authorship
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg || msg.senderId !== user.id) {
+      toast.error("You can only unsend your own messages.");
+      return;
+    }
+
+    const updated = messages.map((m) =>
+      m.id === messageId ? { ...m, deletedForEveryone: true } : m
+    );
+    setMessages(updated);
+    saveMessages(groupId, updated);
+    setUnsendConfirmId(null);
+    setActiveMenu(null);
+    toast.success("Message unsent for everyone.");
   };
 
   const handleShare = () => {
@@ -187,6 +373,9 @@ export default function StudyGroupDetailPage() {
 
   const isFull = group.membersCount >= group.maxMembers;
   const capacityPercent = Math.min(100, Math.round((group.membersCount / group.maxMembers) * 100));
+
+  // Filter out deleted-for-me messages for the current user
+  const visibleMessages = messages.filter((msg) => !deletedForMe.has(msg.id));
 
   return (
     <div className="container max-w-5xl mx-auto px-4 py-8 space-y-8">
@@ -334,7 +523,7 @@ export default function StudyGroupDetailPage() {
           </div>
         </div>
 
-        {/* Right: Squad Discussion Board (Mock / Realtime ready) */}
+        {/* Right: Squad Discussion Board */}
         <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 space-y-4 flex flex-col justify-between">
           <div className="flex items-center justify-between border-b border-border/60 pb-3">
             <div className="flex items-center gap-2">
@@ -348,28 +537,98 @@ export default function StudyGroupDetailPage() {
 
           {/* Messages list */}
           <div className="space-y-3 min-h-[220px] max-h-[350px] overflow-y-auto pr-1">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={cn(
-                  "p-3 rounded-xl text-xs space-y-1 max-w-[85%]",
-                  msg.isSelf
-                    ? "ml-auto bg-primary text-primary-foreground"
-                    : "bg-muted/40 text-foreground border border-border/50"
-                )}
-              >
-                <div
-                  className={cn(
-                    "flex items-center justify-between text-[10px] font-semibold gap-2",
-                    msg.isSelf ? "text-primary-foreground/80" : "text-muted-foreground"
-                  )}
-                >
-                  <span>{msg.sender}</span>
-                  <span>{msg.time}</span>
-                </div>
-                <p className="leading-relaxed">{msg.text}</p>
-              </div>
-            ))}
+            {visibleMessages.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">
+                No messages yet. Start the conversation!
+              </p>
+            ) : (
+              visibleMessages.map((msg) => {
+                const isSelf = msg.senderId === user?.id;
+                const isDeleted = msg.deletedForEveryone;
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={cn(
+                      "p-3 rounded-xl text-xs space-y-1 max-w-[85%] relative group",
+                      isSelf
+                        ? "ml-auto bg-primary text-primary-foreground"
+                        : "bg-muted/40 text-foreground border border-border/50"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center justify-between text-[10px] font-semibold gap-2",
+                        isSelf ? "text-primary-foreground/80" : "text-muted-foreground"
+                      )}
+                    >
+                      <span>{msg.senderName}</span>
+                      <div className="flex items-center gap-1">
+                        <span>{formatMessageTime(msg.timestamp)}</span>
+                        {/* Action menu for own messages */}
+                        {isSelf && !isDeleted && (
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(activeMenu === msg.id ? null : msg.id);
+                              }}
+                              className={cn(
+                                "p-0.5 rounded-sm transition-opacity",
+                                "opacity-0 group-hover:opacity-100",
+                                activeMenu === msg.id && "opacity-100",
+                                isSelf
+                                  ? "hover:bg-primary-foreground/20 text-primary-foreground/70"
+                                  : "hover:bg-muted text-muted-foreground"
+                              )}
+                              aria-label="Message options"
+                            >
+                              <MoreVertical className="h-3 w-3" />
+                            </button>
+
+                            {activeMenu === msg.id && (
+                              <div
+                                className="absolute right-0 top-5 z-50 min-w-[160px] rounded-lg border border-border bg-popover p-1 shadow-md"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
+                                  onClick={() => handleDeleteForMe(msg.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                  Delete for me
+                                </button>
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                                  onClick={() => {
+                                    setUnsendConfirmId(msg.id);
+                                    setActiveMenu(null);
+                                  }}
+                                >
+                                  <Ban className="h-3 w-3" />
+                                  Unsend for everyone
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {isDeleted ? (
+                      <p className="leading-relaxed italic opacity-60">
+                        This message was deleted
+                      </p>
+                    ) : (
+                      <p className="leading-relaxed">{msg.text}</p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+            <div ref={chatEndRef} />
           </div>
 
           {/* Chat input */}
@@ -397,6 +656,44 @@ export default function StudyGroupDetailPage() {
           </form>
         </div>
       </div>
+
+      {/* Unsend Confirmation Dialog */}
+      {unsendConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm mx-4 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Ban className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Unsend Message?</h3>
+                <p className="text-xs text-muted-foreground">
+                  This will replace the message with &ldquo;This message was deleted&rdquo; for everyone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUnsendConfirmId(null)}
+                className="text-xs h-8"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleUnsendForEveryone(unsendConfirmId)}
+                className="text-xs h-8 gap-1.5"
+              >
+                <Ban className="h-3 w-3" />
+                Unsend for Everyone
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,8 +7,6 @@ import {
   BookOpen,
   Plus,
   Shield,
-  FileCheck2,
-  Sparkles,
 } from "lucide-react";
 import { academicService } from "@/services/academic";
 import { WikiArticle, WikiCategory } from "@/types/academic.types";

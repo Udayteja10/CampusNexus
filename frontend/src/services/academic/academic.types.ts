@@ -63,6 +63,15 @@ export interface SubmitFacultyReviewInput {
   isAnonymous?: boolean;
 }
 
+export interface EditFacultyReviewInput {
+  rating?: number;
+  tags?: string[];
+  comment?: string;
+  semester?: Semester;
+  academicYear?: string;
+  isAnonymous?: boolean;
+}
+
 export interface CreateAcademicRequestInput {
   title: string;
   description: string;
@@ -127,6 +136,8 @@ export interface IAcademicService {
   getFacultyById(id: string): Promise<Faculty | null>;
   getFacultyReviews(facultyId: string): Promise<FacultyReview[]>;
   submitFacultyReview(input: SubmitFacultyReviewInput): Promise<FacultyReview>;
+  editFacultyReview(reviewId: string, input: EditFacultyReviewInput): Promise<FacultyReview>;
+  deleteFacultyReview(reviewId: string): Promise<boolean>;
   canReviewFaculty(facultyId: string): Promise<{ allowed: boolean; reason?: string }>;
 
   // ─── Academic Calendar ───

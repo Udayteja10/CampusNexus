@@ -170,6 +170,8 @@ export interface FacultyReview {
   semester: Semester;
   academicYear: string;
   createdAt: string;
+  updatedAt?: string;
+  isDeleted?: boolean;
 }
 
 // ─── Academic Calendar Domain ────────────────────────────────────────────────

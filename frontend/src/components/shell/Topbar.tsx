@@ -1,6 +1,5 @@
-"use client";
-
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Menu, Search, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,19 @@ interface TopbarProps {
 }
 
 export function Topbar({ onMenuClick }: TopbarProps) {
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = searchQuery.trim();
+    if (clean) {
+      router.push(`/search?q=${encodeURIComponent(clean)}`);
+    } else {
+      router.push("/search");
+    }
+  };
 
   return (
     <>
@@ -48,7 +59,10 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         )}
 
         {/* Global search */}
-        <div className="relative flex-1 max-w-xs sm:max-w-sm">
+        <form
+          onSubmit={handleSearchSubmit}
+          className="relative flex-1 max-w-xs sm:max-w-sm"
+        >
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
@@ -56,10 +70,12 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           <Input
             type="search"
             placeholder="Search CampusNexus…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Global search"
             className="h-9 pl-9 text-sm bg-muted/40 border-border/60 focus-visible:bg-background"
           />
-        </div>
+        </form>
 
         {/* Right actions */}
         <div className="ml-auto flex items-center gap-1">

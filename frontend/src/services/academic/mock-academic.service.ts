@@ -26,6 +26,7 @@ import {
   UploadNewVersionInput,
   CreateStudyGroupInput,
   SubmitFacultyReviewInput,
+  EditFacultyReviewInput,
   CreateAcademicRequestInput,
   CreateWikiArticleInput,
   AcademicDashboardStats,
@@ -762,8 +763,32 @@ export class MockAcademicService implements IAcademicService {
 
   // ─── Faculty & Reviews ─────────────────────────────────────────────────────
 
+  /**
+   * Computes rating and reviewCount for a faculty member from actual review records.
+   * This is the SINGLE SOURCE OF TRUTH for faculty aggregates.
+   */
+  private computeFacultyAggregates(facultyId: string): { rating: number; reviewCount: number } {
+    const reviews = getStorage<FacultyReview[]>(STORAGE_KEYS.FACULTY_REVIEWS, SEED_FACULTY_REVIEWS);
+    const facultyReviews = reviews.filter((r) => r.facultyId === facultyId && !r.isDeleted);
+    if (facultyReviews.length === 0) return { rating: 0, reviewCount: 0 };
+    const sum = facultyReviews.reduce((acc, r) => acc + r.rating, 0);
+    return {
+      rating: Number((sum / facultyReviews.length).toFixed(1)),
+      reviewCount: facultyReviews.length,
+    };
+  }
+
+  /**
+   * Enriches a faculty record with computed rating/reviewCount from reviews.
+   */
+  private enrichFacultyWithAggregates(faculty: Faculty): Faculty {
+    const agg = this.computeFacultyAggregates(faculty.id);
+    return { ...faculty, rating: agg.rating, reviewCount: agg.reviewCount };
+  }
+
   async getFacultyList(filters?: FacultyFilters): Promise<Faculty[]> {
     await sleep(150);
+    this.ensureSeeded();
     const user = this.getCurrentUser();
     const activeDeptId =
       user?.role === "ADMIN" || user?.role === "MODERATOR"
@@ -772,7 +797,7 @@ export class MockAcademicService implements IAcademicService {
 
     let facultyList = SEED_FACULTY.filter(
       (f) => f.departmentId.toLowerCase() === activeDeptId.toLowerCase()
-    );
+    ).map((f) => this.enrichFacultyWithAggregates(f));
 
     if (filters?.subject) {
       facultyList = facultyList.filter((f) =>
@@ -800,18 +825,19 @@ export class MockAcademicService implements IAcademicService {
 
   async getFacultyById(id: string): Promise<Faculty | null> {
     await sleep(150);
+    this.ensureSeeded();
     const faculty = SEED_FACULTY.find((f) => f.id === id);
     if (!faculty) return null;
 
     this.assertDepartmentAccess(faculty.departmentId);
-    return faculty;
+    return this.enrichFacultyWithAggregates(faculty);
   }
 
   async getFacultyReviews(facultyId: string): Promise<FacultyReview[]> {
     await sleep(150);
     this.ensureSeeded();
     const reviews = getStorage<FacultyReview[]>(STORAGE_KEYS.FACULTY_REVIEWS, SEED_FACULTY_REVIEWS);
-    return reviews.filter((r) => r.facultyId === facultyId);
+    return reviews.filter((r) => r.facultyId === facultyId && !r.isDeleted);
   }
 
   async canReviewFaculty(facultyId: string): Promise<{ allowed: boolean; reason?: string }> {
@@ -830,7 +856,7 @@ export class MockAcademicService implements IAcademicService {
     // Check if user has already reviewed this academic year
     const reviews = getStorage<FacultyReview[]>(STORAGE_KEYS.FACULTY_REVIEWS, SEED_FACULTY_REVIEWS);
     const hasReviewed = reviews.some(
-      (r) => r.facultyId === facultyId && r.studentId === user.id && r.academicYear === "2024-2025"
+      (r) => r.facultyId === facultyId && r.studentId === user.id && !r.isDeleted && r.academicYear === "2024-2025"
     );
 
     if (hasReviewed) {
@@ -867,17 +893,83 @@ export class MockAcademicService implements IAcademicService {
     setStorage(STORAGE_KEYS.FACULTY_REVIEWS, reviews);
 
     // Recalculate faculty average rating
-    const facultyReviews = reviews.filter((r) => r.facultyId === input.facultyId);
-    const avgRating =
-      facultyReviews.reduce((sum, r) => sum + r.rating, 0) / facultyReviews.length;
-
+    const agg = this.computeFacultyAggregates(input.facultyId);
     const faculty = SEED_FACULTY.find((f) => f.id === input.facultyId);
     if (faculty) {
-      faculty.rating = Number(avgRating.toFixed(1));
-      faculty.reviewCount = facultyReviews.length;
+      faculty.rating = agg.rating;
+      faculty.reviewCount = agg.reviewCount;
     }
 
     return newReview;
+  }
+
+  async editFacultyReview(reviewId: string, input: EditFacultyReviewInput): Promise<FacultyReview> {
+    await sleep(250);
+    const user = this.getCurrentUser();
+    if (!user) throw new Error("Unauthenticated");
+
+    const reviews = getStorage<FacultyReview[]>(STORAGE_KEYS.FACULTY_REVIEWS, SEED_FACULTY_REVIEWS);
+    const reviewIndex = reviews.findIndex((r) => r.id === reviewId && !r.isDeleted);
+    if (reviewIndex === -1) throw new Error("Review not found");
+
+    const existingReview = reviews[reviewIndex];
+    if (existingReview.studentId !== user.id) {
+      throw new AcademicAccessError("Unauthorized: You can only edit your own reviews.");
+    }
+
+    const updatedReview: FacultyReview = {
+      ...existingReview,
+      rating: input.rating !== undefined ? Math.max(1, Math.min(5, input.rating)) : existingReview.rating,
+      tags: input.tags !== undefined ? input.tags : existingReview.tags,
+      comment: input.comment !== undefined ? input.comment.trim() : existingReview.comment,
+      semester: input.semester !== undefined ? input.semester : existingReview.semester,
+      academicYear: input.academicYear !== undefined ? input.academicYear : existingReview.academicYear,
+      isAnonymous: input.isAnonymous !== undefined ? Boolean(input.isAnonymous) : existingReview.isAnonymous,
+      studentName: input.isAnonymous !== undefined
+        ? (input.isAnonymous ? "Anonymous Student" : user.fullName || user.username)
+        : existingReview.studentName,
+      updatedAt: new Date().toISOString(),
+    };
+
+    reviews[reviewIndex] = updatedReview;
+    setStorage(STORAGE_KEYS.FACULTY_REVIEWS, reviews);
+
+    // Recalculate faculty aggregates
+    const agg = this.computeFacultyAggregates(updatedReview.facultyId);
+    const faculty = SEED_FACULTY.find((f) => f.id === updatedReview.facultyId);
+    if (faculty) {
+      faculty.rating = agg.rating;
+      faculty.reviewCount = agg.reviewCount;
+    }
+
+    return updatedReview;
+  }
+
+  async deleteFacultyReview(reviewId: string): Promise<boolean> {
+    await sleep(250);
+    const user = this.getCurrentUser();
+    if (!user) throw new Error("Unauthenticated");
+
+    const reviews = getStorage<FacultyReview[]>(STORAGE_KEYS.FACULTY_REVIEWS, SEED_FACULTY_REVIEWS);
+    const review = reviews.find((r) => r.id === reviewId);
+    if (!review) throw new Error("Review not found");
+
+    if (review.studentId !== user.id && user.role !== "ADMIN") {
+      throw new AcademicAccessError("Unauthorized: You can only delete your own reviews.");
+    }
+
+    review.isDeleted = true;
+    setStorage(STORAGE_KEYS.FACULTY_REVIEWS, reviews);
+
+    // Recalculate faculty aggregates
+    const agg = this.computeFacultyAggregates(review.facultyId);
+    const faculty = SEED_FACULTY.find((f) => f.id === review.facultyId);
+    if (faculty) {
+      faculty.rating = agg.rating;
+      faculty.reviewCount = agg.reviewCount;
+    }
+
+    return true;
   }
 
   // ─── Academic Calendar ─────────────────────────────────────────────────────

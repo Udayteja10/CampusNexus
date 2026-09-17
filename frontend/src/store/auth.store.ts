@@ -15,7 +15,7 @@ import type { User, UserRole } from "@/types/user.types";
 // ─── Mock account seed data (dev-only) ───────────────────────────────────────
 
 /** DO NOT expose passwords in UI. Passwords are intentionally omitted here. */
-const MOCK_ACCOUNTS: Array<{
+export const MOCK_ACCOUNTS: Array<{
   email: string;
   role: UserRole;
   user: User;
@@ -213,6 +213,9 @@ export interface AuthState {
   /** Clear the current error message */
   clearError: () => void;
 
+  /** Update current user's profile details */
+  updateProfile: (data: Partial<Pick<User, "fullName" | "bio" | "department" | "batch" | "avatarUrl">>) => void;
+
   /**
    * Hydrate the store from persisted storage.
    * Call once on app startup (in a client component or layout).
@@ -223,7 +226,7 @@ export interface AuthState {
 
 // ─── Zustand Store ────────────────────────────────────────────────────────────
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
@@ -263,6 +266,21 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  updateProfile: (data) => {
+    const current = get().user;
+    if (!current) return;
+    const updated: User = { ...current, ...data };
+    if (typeof window !== "undefined") {
+      const local = localStorage.getItem(STORAGE_KEY);
+      if (local) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } else {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      }
+    }
+    set({ user: updated });
+  },
 
   hydrate: () => {
     const user = loadPersistedUser();

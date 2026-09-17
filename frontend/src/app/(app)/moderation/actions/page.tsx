@@ -1,7 +1,20 @@
-import type { Metadata } from "next";
-import { ModulePlaceholder } from "@/components/shared/ModulePlaceholder";
-import { Shield } from "lucide-react";
-export const metadata: Metadata = { title: "Moderation Actions" };
-export default function ModActionsPage() {
-  return <ModulePlaceholder title="Moderation — Actions" description="Bans, warns and content removals — coming in Phase 8." icon={<Shield className="h-8 w-8 text-[var(--cn-amber)]" />} phase="Phase 8" />;
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ROUTES } from "@/lib/constants";
+import { Loader2 } from "lucide-react";
+
+export default function LegacyModActionsPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace(ROUTES.ADMIN_MODERATION);
+  }, [router]);
+
+  return (
+    <div className="flex min-h-[300px] items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  );
 }

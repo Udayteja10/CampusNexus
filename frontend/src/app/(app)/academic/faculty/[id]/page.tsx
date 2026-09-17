@@ -8,11 +8,9 @@ import {
   MapPin,
   Clock,
   Mail,
-  BookOpen,
-  Sparkles,
   MessageSquarePlus,
-  Star,
-  CheckCircle2,
+  Pencil,
+  Trash2,
   AlertTriangle,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
@@ -25,6 +23,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DeptBadge } from "@/components/academic/DeptBadge";
 import { StarRating } from "@/components/academic/StarRating";
 import { FacultyReviewDialog } from "@/components/academic/FacultyReviewDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "@/lib/toast";
 
 export default function FacultyDetailPage() {
   const params = useParams();
@@ -36,6 +45,9 @@ export default function FacultyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [editingReview, setEditingReview] = useState<FacultyReview | null>(null);
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = async () => {
     if (!facultyId) return;
@@ -64,6 +76,33 @@ export default function FacultyDetailPage() {
   useEffect(() => {
     loadData();
   }, [facultyId, user?.department]);
+
+  const userReview = reviews.find((r) => r.studentId === user?.id);
+
+  const handleOpenCreateReview = () => {
+    setEditingReview(null);
+    setReviewDialogOpen(true);
+  };
+
+  const handleOpenEditReview = (rev: FacultyReview) => {
+    setEditingReview(rev);
+    setReviewDialogOpen(true);
+  };
+
+  const handleDeleteReviewConfirm = async () => {
+    if (!deletingReviewId) return;
+    setIsDeleting(true);
+    try {
+      await academicService.deleteFacultyReview(deletingReviewId);
+      toast.success("Your review has been deleted.");
+      setDeletingReviewId(null);
+      await loadData();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete review.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -113,20 +152,26 @@ export default function FacultyDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <DeptBadge departmentIdOrName={faculty.departmentId} size="md" />
-            {faculty.isAcceptingStudents && (
-              <Badge variant="outline" className="text-xs gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700">
-                <Sparkles className="h-3.5 w-3.5" /> Mentoring Capstone Projects
-              </Badge>
-            )}
           </div>
 
-          <Button
-            onClick={() => setReviewDialogOpen(true)}
-            className="gap-2 self-start sm:self-auto shadow-xs"
-          >
-            <MessageSquarePlus className="h-4 w-4" />
-            <span>Write Feedback Review</span>
-          </Button>
+          {userReview ? (
+            <Button
+              onClick={() => handleOpenEditReview(userReview)}
+              variant="outline"
+              className="gap-2 self-start sm:self-auto shadow-xs border-primary/40 text-primary hover:bg-primary/5"
+            >
+              <Pencil className="h-4 w-4" />
+              <span>Edit Your Review</span>
+            </Button>
+          ) : (
+            <Button
+              onClick={handleOpenCreateReview}
+              className="gap-2 self-start sm:self-auto shadow-xs"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+              <span>Write Feedback Review</span>
+            </Button>
+          )}
         </div>
 
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 border-b border-border/60 pb-6">
@@ -151,7 +196,7 @@ export default function FacultyDetailPage() {
             </div>
             <StarRating rating={faculty.rating} size="md" className="justify-center mb-1" />
             <div className="text-xs text-muted-foreground font-medium">
-              Based on {reviews.length} {reviews.length === 1 ? "review" : "reviews"}
+              Based on {faculty.reviewCount} {faculty.reviewCount === 1 ? "review" : "reviews"}
             </div>
           </div>
         </div>
@@ -233,15 +278,27 @@ export default function FacultyDetailPage() {
             </p>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setReviewDialogOpen(true)}
-            className="text-xs gap-1.5"
-          >
-            <MessageSquarePlus className="h-3.5 w-3.5" />
-            <span>Write Review</span>
-          </Button>
+          {userReview ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenEditReview(userReview)}
+              className="text-xs gap-1.5 border-primary/40 text-primary"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span>Edit Your Review</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleOpenCreateReview}
+              className="text-xs gap-1.5"
+            >
+              <MessageSquarePlus className="h-3.5 w-3.5" />
+              <span>Write Review</span>
+            </Button>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -250,39 +307,74 @@ export default function FacultyDetailPage() {
               No reviews written for this professor yet. Be the first to share your classroom experience!
             </p>
           ) : (
-            reviews.map((rev) => (
-              <div
-                key={rev.id}
-                className="p-4 rounded-xl bg-muted/30 border border-border/60 text-xs space-y-2"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">
-                      {rev.studentName}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      Sem {rev.semester} ({rev.academicYear})
-                    </Badge>
-                  </div>
-                  <StarRating rating={rev.rating} size="sm" />
-                </div>
+            reviews.map((rev) => {
+              const isOwner = user && rev.studentId === user.id;
 
-                {rev.tags && rev.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {rev.tags.map((t, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium"
-                      >
-                        {t}
+              return (
+                <div
+                  key={rev.id}
+                  className="p-4 rounded-xl bg-muted/30 border border-border/60 text-xs space-y-2 relative group"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">
+                        {rev.studentName}
                       </span>
-                    ))}
-                  </div>
-                )}
+                      <Badge variant="secondary" className="text-[10px]">
+                        Sem {rev.semester} ({rev.academicYear})
+                      </Badge>
+                      {rev.updatedAt && (
+                        <span className="text-[10px] text-muted-foreground italic">
+                          (Edited)
+                        </span>
+                      )}
+                    </div>
 
-                <p className="text-foreground leading-relaxed pt-1">{rev.comment}</p>
-              </div>
-            ))
+                    <div className="flex items-center gap-3">
+                      <StarRating rating={rev.rating} size="sm" />
+
+                      {isOwner && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-primary"
+                            onClick={() => handleOpenEditReview(rev)}
+                            title="Edit Review"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeletingReviewId(rev.id)}
+                            title="Delete Review"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {rev.tags && rev.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {rev.tags.map((t, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="text-foreground leading-relaxed pt-1">{rev.comment}</p>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
@@ -292,8 +384,34 @@ export default function FacultyDetailPage() {
         open={reviewDialogOpen}
         onOpenChange={setReviewDialogOpen}
         faculty={faculty}
+        initialReview={editingReview}
         onSuccess={loadData}
       />
+
+      {/* Delete Review Confirmation Dialog */}
+      <AlertDialog
+        open={Boolean(deletingReviewId)}
+        onOpenChange={(open) => !open && setDeletingReviewId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your review?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. Your feedback will be permanently removed from this faculty member&apos;s profile and average ratings will be updated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteReviewConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete Review"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

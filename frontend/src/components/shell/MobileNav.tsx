@@ -11,17 +11,22 @@ import {
   Briefcase,
   FileText,
   Building2,
+  Building,
   CalendarDays,
   ShoppingBag,
   SearchIcon,
   Flag,
   Settings,
-  Shield,
+  ShieldAlert,
+  History,
   UserCog,
   LogOut,
-  Bell,
   HelpCircle,
   Star,
+  Compass,
+  Trophy,
+  Bus,
+  Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore, selectIsModerator, selectIsAdmin } from "@/store/auth.store";
@@ -48,38 +53,46 @@ const studentNav: NavGroup[] = [
     label: "Main",
     items: [
       { href: ROUTES.DASHBOARD, label: "Dashboard", icon: LayoutDashboard, exact: true },
-      { href: ROUTES.SEARCH, label: "Search", icon: SearchIcon },
-      { href: ROUTES.NOTIFICATIONS, label: "Notifications", icon: Bell },
-    ],
-  },
-  {
-    label: "Community",
-    items: [
       { href: ROUTES.COMMUNITY, label: "Community", icon: MessageSquare },
+      { href: ROUTES.SEARCH, label: "Search", icon: SearchIcon },
     ],
   },
   {
     label: "Academic",
     items: [
-      { href: ROUTES.RESOURCES, label: "Resources", icon: BookOpen },
-      { href: ROUTES.FACULTY, label: "Faculty", icon: Users },
+      { href: ROUTES.ACADEMIC, label: "Academic Hub", icon: GraduationCap, exact: true },
+      { href: ROUTES.ACADEMIC_RESOURCES, label: "Resources & PYQs", icon: BookOpen },
+      { href: ROUTES.ACADEMIC_SUBJECTS, label: "Subjects", icon: FileText },
+      { href: ROUTES.ACADEMIC_STUDY_GROUPS, label: "Study Groups", icon: Users },
+      { href: ROUTES.ACADEMIC_FACULTY, label: "Faculty Directory", icon: Building2 },
+      { href: ROUTES.ACADEMIC_CALENDAR, label: "Academic Calendar", icon: CalendarDays },
+      { href: ROUTES.ACADEMIC_WIKI, label: "Campus Wiki", icon: Star },
     ],
   },
   {
     label: "Career",
     items: [
-      { href: ROUTES.PLACEMENTS, label: "Placements", icon: Briefcase },
-      { href: ROUTES.INTERNSHIPS, label: "Internships", icon: Star },
-      { href: ROUTES.RESUME_REVIEW, label: "Resume Review", icon: FileText },
+      { href: ROUTES.CAREER, label: "Career Hub", icon: Briefcase, exact: true },
+      { href: ROUTES.CAREER_PLACEMENTS, label: "Placements", icon: Building2 },
+      { href: ROUTES.CAREER_INTERNSHIPS, label: "Internships", icon: GraduationCap },
+      { href: ROUTES.CAREER_APPLICATIONS, label: "My Applications", icon: Star },
+      { href: ROUTES.CAREER_COLLECTIONS, label: "Collections", icon: BookOpen },
+      { href: ROUTES.CAREER_RESUME_REVIEW, label: "Resume Review", icon: FileText },
     ],
   },
   {
     label: "Campus Life",
     items: [
-      { href: ROUTES.CLUBS, label: "Clubs", icon: Building2 },
-      { href: ROUTES.EVENTS, label: "Events", icon: CalendarDays },
-      { href: ROUTES.MARKETPLACE, label: "Marketplace", icon: ShoppingBag },
-      { href: ROUTES.LOST_FOUND, label: "Lost & Found", icon: SearchIcon },
+      { href: ROUTES.CAMPUS_LIFE, label: "Campus Life Hub", icon: Compass, exact: true },
+      { href: ROUTES.CAMPUS_LIFE_CLUBS, label: "Clubs", icon: Users },
+      { href: ROUTES.CAMPUS_LIFE_EVENTS, label: "Events", icon: CalendarDays },
+      { href: ROUTES.CAMPUS_LIFE_SPORTS, label: "Sports", icon: Trophy },
+      { href: ROUTES.CAMPUS_LIFE_FACILITIES, label: "Facilities", icon: Building },
+      { href: ROUTES.CAMPUS_LIFE_LOST_FOUND, label: "Lost & Found", icon: SearchIcon },
+      { href: ROUTES.CAMPUS_LIFE_MARKETPLACE, label: "Marketplace", icon: ShoppingBag },
+      { href: ROUTES.CAMPUS_LIFE_TRANSPORT, label: "Transport", icon: Bus },
+      { href: ROUTES.CAMPUS_LIFE_HOSTEL, label: "Hostel", icon: Home },
+      { href: ROUTES.CAMPUS_LIFE_DIRECTORY, label: "Campus Directory", icon: BookOpen },
     ],
   },
   {
@@ -95,8 +108,10 @@ const moderatorNav: NavGroup[] = [
   {
     label: "Moderation",
     items: [
-      { href: ROUTES.MOD_REPORTS, label: "Reports", icon: Flag },
-      { href: ROUTES.MOD_ACTIONS, label: "Actions", icon: Shield },
+      { href: ROUTES.ADMIN_MODERATION, label: "Moderation Desk", icon: ShieldAlert },
+      { href: ROUTES.ADMIN_REPORTS, label: "Content Reports", icon: Flag },
+      { href: ROUTES.ADMIN_SUPPORT, label: "Support Queue", icon: HelpCircle },
+      { href: ROUTES.ADMIN_AUDIT, label: "Audit Trail", icon: History },
     ],
   },
 ];
@@ -105,9 +120,14 @@ const adminNav: NavGroup[] = [
   {
     label: "Administration",
     items: [
-      { href: ROUTES.ADMIN_DASHBOARD, label: "Admin Panel", icon: UserCog },
-      { href: ROUTES.ADMIN_USERS, label: "Users", icon: Users },
+      { href: ROUTES.ADMIN_DASHBOARD, label: "Admin Console", icon: UserCog, exact: true },
+      { href: ROUTES.ADMIN_USERS, label: "User Management", icon: Users },
+      { href: ROUTES.ADMIN_MODERATION, label: "Moderation Desk", icon: ShieldAlert },
       { href: ROUTES.ADMIN_REPORTS, label: "Reports", icon: Flag },
+      { href: ROUTES.ADMIN_SUPPORT, label: "Support Desk", icon: HelpCircle },
+      { href: ROUTES.ADMIN_AUDIT, label: "Audit Trail", icon: History },
+      { href: ROUTES.ADMIN_CAREER_PLACEMENTS, label: "Placements Mgmt", icon: Briefcase },
+      { href: ROUTES.ADMIN_CAREER_INTERNSHIPS, label: "Internships Mgmt", icon: GraduationCap },
     ],
   },
 ];

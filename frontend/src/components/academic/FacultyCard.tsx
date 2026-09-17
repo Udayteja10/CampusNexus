@@ -6,14 +6,12 @@ import {
   MapPin,
   Clock,
   Mail,
-  Sparkles,
   ChevronRight,
   MessageSquarePlus,
 } from "lucide-react";
 import { Faculty } from "@/types/academic.types";
 import { ROUTES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { DeptBadge } from "./DeptBadge";
 import { StarRating } from "./StarRating";
 import { cn } from "@/lib/utils";
@@ -37,11 +35,7 @@ export function FacultyCard({ faculty, onReviewClick, className }: FacultyCardPr
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-1.5">
             <DeptBadge departmentIdOrName={faculty.departmentId} size="sm" />
-            {faculty.isAcceptingStudents && (
-              <Badge variant="outline" className="text-[10px] gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
-                <Sparkles className="h-2.5 w-2.5" /> Mentoring Projects
-              </Badge>
-            )}
+
           </div>
           <StarRating rating={faculty.rating} reviewCount={faculty.reviewCount} showScore size="sm" />
         </div>

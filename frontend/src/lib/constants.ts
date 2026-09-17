@@ -26,7 +26,13 @@ export const ROUTES = {
   NOTIFICATIONS: "/notifications",
   SEARCH: "/search",
   SETTINGS: "/settings",
-  HELP: "/help-support",
+  HELP: "/help",
+  HELP_SUPPORT: "/help-support",
+  HELP_FAQ: "/help/faq",
+  HELP_FAQ_DETAIL: (slug: string) => `/help/faq/${slug}`,
+  HELP_CONTACT: "/help/contact",
+  HELP_REQUESTS: "/help/requests",
+  HELP_REQUEST_DETAIL: (id: string) => `/help/requests/${id}`,
 
   // Community
   COMMUNITY: "/community",
@@ -59,11 +65,35 @@ export const ROUTES = {
   WIKI: "/resources/wiki",
 
   // Career
+  CAREER: "/career",
+  CAREER_PLACEMENTS: "/career/placements",
+  CAREER_PLACEMENT_DETAIL: (id: string) => `/career/placements/${id}`,
+  CAREER_INTERNSHIPS: "/career/internships",
+  CAREER_INTERNSHIP_DETAIL: (id: string) => `/career/internships/${id}`,
+  CAREER_APPLICATIONS: "/career/applications",
+  CAREER_RESUME_REVIEW: "/career/resume-review",
+  CAREER_COLLECTIONS: "/career/collections",
+
+  // Legacy Career aliases (redirected)
   PLACEMENTS: "/placements",
   INTERNSHIPS: "/internships",
   RESUME_REVIEW: "/resume-review",
 
   // Campus Life
+  CAMPUS_LIFE: "/campus-life",
+  CAMPUS_LIFE_CLUBS: "/campus-life/clubs",
+  CAMPUS_LIFE_CLUB_DETAIL: (id: string) => `/campus-life/clubs/${id}`,
+  CAMPUS_LIFE_EVENTS: "/campus-life/events",
+  CAMPUS_LIFE_EVENT_DETAIL: (id: string) => `/campus-life/events/${id}`,
+  CAMPUS_LIFE_SPORTS: "/campus-life/sports",
+  CAMPUS_LIFE_FACILITIES: "/campus-life/facilities",
+  CAMPUS_LIFE_LOST_FOUND: "/campus-life/lost-found",
+  CAMPUS_LIFE_MARKETPLACE: "/campus-life/marketplace",
+  CAMPUS_LIFE_TRANSPORT: "/campus-life/transport",
+  CAMPUS_LIFE_HOSTEL: "/campus-life/hostel",
+  CAMPUS_LIFE_DIRECTORY: "/campus-life/directory",
+
+  // Legacy Campus Life aliases (redirected)
   CLUBS: "/clubs",
   EVENTS: "/events",
   MARKETPLACE: "/marketplace",
@@ -84,8 +114,14 @@ export const ROUTES = {
   ADMIN_ANNOUNCEMENTS: "/admin/announcements",
   ADMIN_BADGES: "/admin/badges",
   ADMIN_REPORTS: "/admin/reports",
+  ADMIN_REPORT_DETAIL: (id: string) => `/admin/reports/${id}`,
   ADMIN_SUPPORT: "/admin/support",
+  ADMIN_SUPPORT_DETAIL: (id: string) => `/admin/support/${id}`,
+  ADMIN_MODERATION: "/admin/moderation",
+  ADMIN_AUDIT: "/admin/audit",
   ADMIN_SETTINGS: "/admin/settings",
+  ADMIN_CAREER_PLACEMENTS: "/admin/career/placements",
+  ADMIN_CAREER_INTERNSHIPS: "/admin/career/internships",
 } as const;
 
 // Routes that do NOT require authentication
