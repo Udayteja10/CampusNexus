@@ -23,6 +23,7 @@ import { SupportRequest, SupportRequestStatus } from "@/types/help.types";
 import { ROUTES } from "@/lib/constants";
 import { useAuthStore } from "@/store/auth.store";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 export default function AdminSupportDetailPage({
   params,
@@ -78,7 +79,7 @@ export default function AdminSupportDetailPage({
         });
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update status.");
+      toast.error(err instanceof Error ? err.message : "Failed to update status.");
     }
   };
 
@@ -91,6 +92,7 @@ export default function AdminSupportDetailPage({
       const updated = await helpService.addMessageToRequest(ticket.id, replyContent.trim());
       setTicket(updated);
       setReplyContent("");
+      toast.success("Reply dispatched.");
 
       // Record audit log
       if (currentUser) {
@@ -106,7 +108,7 @@ export default function AdminSupportDetailPage({
         });
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to send reply.");
+      toast.error(err instanceof Error ? err.message : "Failed to send reply.");
     } finally {
       setSubmittingReply(false);
     }

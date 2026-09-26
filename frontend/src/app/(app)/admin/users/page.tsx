@@ -190,6 +190,7 @@ export default function AdminUsersPage() {
                             </div>
                             <div className="text-[11px] text-muted-foreground">
                               @{user.username} • {user.email}
+                              {user.htno && ` • ${user.htno}`}
                             </div>
                           </div>
                         </div>
@@ -197,9 +198,13 @@ export default function AdminUsersPage() {
 
                       <td className="px-3 py-3.5">
                         <div className="font-medium text-foreground">{user.department || "General"}</div>
-                        {user.batch && (
+                        {user.yearOfStudy ? (
+                          <div className="text-[11px] text-muted-foreground">
+                            Year {user.yearOfStudy} {user.regulation ? `(${user.regulation})` : ""}
+                          </div>
+                        ) : user.batch ? (
                           <div className="text-[11px] text-muted-foreground">{user.batch}</div>
-                        )}
+                        ) : null}
                       </td>
 
                       <td className="px-3 py-3.5">
@@ -219,7 +224,18 @@ export default function AdminUsersPage() {
                       </td>
 
                       <td className="px-3 py-3.5">
-                        <UserStatusBadge status={user.accountStatus} />
+                        <div className="flex flex-col gap-1 items-start">
+                          <UserStatusBadge status={user.accountStatus} />
+                          {user.emailVerified ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                              <UserCheck className="h-2.5 w-2.5" /> Email Verified
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                              <UserX className="h-2.5 w-2.5" /> Unverified
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-3 py-3.5 text-right pr-4">

@@ -72,15 +72,28 @@ export class UserService {
    * Update profile information for the authenticated user.
    */
   async updateUserProfile(
-    data: Partial<Pick<User, "fullName" | "bio" | "department" | "batch" | "avatarUrl">>
+    data: { fullName?: string; username?: string; bio?: string; department?: string; batch?: string; avatarUrl?: string }
   ): Promise<User> {
     const authStore = useAuthStore.getState();
-    authStore.updateProfile(data);
-    const updated = useAuthStore.getState().user;
-    if (!updated) {
-      throw new Error("No authenticated user found to update.");
+    try {
+      const updatedUser = await import("@/lib/api").then(m => m.authApi.updateProfile({
+        fullName: data.fullName,
+        username: data.username,
+      }));
+      authStore.updateProfile({
+        ...data,
+        fullName: updatedUser.fullName,
+        username: updatedUser.username,
+      });
+      return authStore.user || updatedUser;
+    } catch {
+      authStore.updateProfile(data);
+      const updated = useAuthStore.getState().user;
+      if (!updated) {
+        throw new Error("No authenticated user found to update.");
+      }
+      return updated;
     }
-    return updated;
   }
 }
 

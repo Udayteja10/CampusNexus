@@ -37,9 +37,14 @@ export interface User {
   username: string;
   email: string;
   fullName: string;
+  emailVerified?: boolean;
   avatarUrl?: string;
   bio?: string;
   department?: string;
+  htno?: string;
+  yearOfStudy?: number;
+  regulation?: string;
+  admissionYear?: number;
   batch?: string; // e.g. "2022-2026"
   role: UserRole;
   isVerified: boolean;
@@ -64,11 +69,36 @@ export interface LoginRequest {
 
 export interface RegisterRequest {
   fullName: string;
+  username: string;
+  htno: string;
+  password: string;
+  confirmPassword?: string;
+}
+
+export interface UsernameAvailabilityResponse {
+  username: string;
+  available: boolean;
+  message: string;
+}
+
+export interface HtnoValidationResponse {
+  htno: string;
+  valid: boolean;
+  available: boolean;
+  admissionYear?: number;
+  yearOfStudy?: number;
+  regulation?: string;
+  department?: string;
+  email?: string;
+  message: string;
+}
+
+export interface RegisterResponse {
   email: string;
   username: string;
-  password: string;
-  department?: string;
-  batch?: string;
+  htno: string;
+  message: string;
+  verificationRequired: boolean;
 }
 
 // ─── Auth Form Types (used by React Hook Form + Zod) ─────────────────────────
@@ -81,7 +111,8 @@ export interface LoginFormData {
 
 export interface RegisterFormData {
   fullName: string;
-  email: string;
+  username: string;
+  htno: string;
   password: string;
   confirmPassword: string;
   agreeToTerms: boolean;

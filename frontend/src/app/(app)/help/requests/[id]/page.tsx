@@ -81,7 +81,6 @@ export default function SupportRequestDetailPage({ params }: RequestDetailPagePr
 
   const handleCloseTicket = async () => {
     if (!request) return;
-    if (!window.confirm("Are you sure you want to mark this support request as closed?")) return;
 
     setClosing(true);
     try {

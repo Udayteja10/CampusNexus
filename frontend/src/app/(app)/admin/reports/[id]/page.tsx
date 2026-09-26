@@ -19,6 +19,7 @@ import { moderationService } from "@/services/moderation";
 import { ModerationReport, ReportStatus } from "@/types/moderation.types";
 import { ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 export default function AdminReportDetailPage({
   params,
@@ -62,8 +63,9 @@ export default function AdminReportDetailPage({
         `Status transitioned to ${status} via report detail console.`
       );
       setReport(updated);
+      toast.success(`Report status updated to ${status}`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update status.");
+      toast.error(err instanceof Error ? err.message : "Failed to update status.");
     }
   };
 

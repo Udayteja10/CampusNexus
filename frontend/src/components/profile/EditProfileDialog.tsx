@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { User } from "@/types/user.types";
 import { userService } from "@/services/user";
-import { DEPARTMENTS } from "@/lib/departments";
 import {
   Dialog,
   DialogContent,
@@ -16,14 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck, Lock } from "lucide-react";
 
 interface EditProfileDialogProps {
   open: boolean;
@@ -39,9 +31,8 @@ export function EditProfileDialog({
   onUpdated,
 }: EditProfileDialogProps) {
   const [fullName, setFullName] = useState(user.fullName || "");
+  const [username, setUsername] = useState(user.username || "");
   const [bio, setBio] = useState(user.bio || "");
-  const [department, setDepartment] = useState(user.department || "");
-  const [batch, setBatch] = useState(user.batch || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,15 +42,18 @@ export function EditProfileDialog({
       setError("Full name is required.");
       return;
     }
+    if (!username.trim()) {
+      setError("Username is required.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
     try {
       const updated = await userService.updateUserProfile({
         fullName: fullName.trim(),
+        username: username.trim().toLowerCase(),
         bio: bio.trim(),
-        department: department.trim(),
-        batch: batch.trim(),
       });
       onUpdated?.(updated);
       onOpenChange(false);
@@ -76,7 +70,7 @@ export function EditProfileDialog({
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
           <DialogDescription>
-            Update your public student profile information.
+            Update your public profile details. Institutional academic information is verified and read-only.
           </DialogDescription>
         </DialogHeader>
 
@@ -99,12 +93,26 @@ export function EditProfileDialog({
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+              placeholder="username (lowercase, numbers, _)"
+              required
+            />
+            <p className="text-[11px] text-muted-foreground">
+              3–20 characters, lowercase letters, numbers, and underscores only.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="bio">Bio</Label>
             <Textarea
               id="bio"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell others about yourself, your interests or academic focus..."
+              placeholder="Tell others about yourself, your academic focus or technical interests..."
               rows={3}
               maxLength={300}
             />
@@ -113,32 +121,33 @@ export function EditProfileDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="department">Department</Label>
-              <Select value={department} onValueChange={(val) => setDepartment(val ?? "")}>
-                <SelectTrigger id="department">
-                  <SelectValue placeholder="Select Department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEPARTMENTS.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.name}>
-                      {dept.shortName} - {dept.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* Verified Academic Identity (Read-only) */}
+          <div className="rounded-xl border border-border/80 bg-muted/40 p-3 space-y-2 text-xs">
+            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <span>Verified Institutional Identity</span>
             </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="batch">Batch / Year</Label>
-              <Input
-                id="batch"
-                value={batch}
-                onChange={(e) => setBatch(e.target.value)}
-                placeholder="e.g. 2022-2026"
-              />
+            <div className="grid grid-cols-2 gap-2 text-muted-foreground pt-1">
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-muted-foreground/70">HTNO</span>
+                <span className="font-mono text-foreground font-medium">{user.htno || "N/A"}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-muted-foreground/70">Department</span>
+                <span className="text-foreground font-medium">{user.department || "N/A"}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-muted-foreground/70">Year of Study</span>
+                <span className="text-foreground font-medium">{user.yearOfStudy ? `Year ${user.yearOfStudy}` : "N/A"}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-muted-foreground/70">Role</span>
+                <span className="text-foreground font-medium">{user.role}</span>
+              </div>
             </div>
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1 pt-1">
+              <Lock className="h-3 w-3" /> Academic credentials are permanently linked to your institutional HTNO.
+            </p>
           </div>
 
           <DialogFooter className="pt-2">

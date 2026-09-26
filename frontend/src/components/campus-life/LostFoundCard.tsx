@@ -53,7 +53,6 @@ export function LostFoundCard({
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this report?")) return;
     setLoadingAction(true);
     try {
       await campusLifeService.deleteLostFoundItem(item.id);

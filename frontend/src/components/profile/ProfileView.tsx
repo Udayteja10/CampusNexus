@@ -73,16 +73,38 @@ export function ProfileView({ user: initialUser, isOwner }: ProfileViewProps) {
               </div>
               <div className="space-y-1.5 text-xs text-muted-foreground">
                 <div className="flex justify-between py-1 border-b border-border/50">
+                  <span>HTNO</span>
+                  <span className="font-mono font-semibold text-foreground">{user.htno || "Not specified"}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span>Institutional Email</span>
+                  <span className="font-medium text-foreground">{user.email}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border/50">
                   <span>Department</span>
                   <span className="font-semibold text-foreground">{user.department || "Not specified"}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-border/50">
-                  <span>Batch</span>
-                  <span className="font-semibold text-foreground">{user.batch || "Not specified"}</span>
+                  <span>Year of Study</span>
+                  <span className="font-semibold text-foreground">{user.yearOfStudy ? `Year ${user.yearOfStudy}` : "Not specified"}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span>Regulation</span>
+                  <span className="font-semibold text-foreground">{user.regulation || "Not specified"}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span>Admission Year</span>
+                  <span className="font-semibold text-foreground">{user.admissionYear || "Not specified"}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span>Email Verification</span>
+                  <span className={`font-semibold ${user.emailVerified ? "text-emerald-600" : "text-amber-600"}`}>
+                    {user.emailVerified ? "Verified (Institutional OTP)" : "Pending Verification"}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span>Status</span>
-                  <span className="font-semibold text-emerald-600">Active Student</span>
+                  <span>Account Role</span>
+                  <span className="font-bold text-foreground">{user.role}</span>
                 </div>
               </div>
             </div>

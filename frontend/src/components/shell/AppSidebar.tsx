@@ -6,6 +6,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   MessageSquare,
+  MessageCircle,
   BookOpen,
   Users,
   Briefcase,
@@ -58,6 +59,7 @@ const studentNav: NavGroup[] = [
     label: "Main",
     items: [
       { href: ROUTES.DASHBOARD, label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: ROUTES.CHAT, label: "Live Chat", icon: MessageCircle },
       { href: ROUTES.COMMUNITY, label: "Community", icon: MessageSquare },
       { href: ROUTES.SEARCH, label: "Search", icon: SearchIcon },
     ],
@@ -127,6 +129,7 @@ const adminNav: NavGroup[] = [
     items: [
       { href: ROUTES.ADMIN_DASHBOARD, label: "Admin Console", icon: UserCog, exact: true },
       { href: ROUTES.ADMIN_USERS, label: "User Management", icon: Users },
+      { href: ROUTES.ADMIN_CLUBS, label: "Club Management", icon: Building },
       { href: ROUTES.ADMIN_MODERATION, label: "Moderation Desk", icon: ShieldAlert },
       { href: ROUTES.ADMIN_REPORTS, label: "Reports", icon: Flag },
       { href: ROUTES.ADMIN_SUPPORT, label: "Support Desk", icon: HelpCircle },

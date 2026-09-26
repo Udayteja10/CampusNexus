@@ -4,397 +4,267 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Compass,
-  Users,
   Calendar,
-  Trophy,
-  Building,
-  Search,
+  Users,
   ShoppingBag,
-  Bus,
-  Home,
+  HelpCircle,
   BookOpen,
+  Award,
   ArrowRight,
   Sparkles,
+  TrendingUp,
+  Tag,
+  Clock,
   CheckCircle2,
-  Ticket,
+  ExternalLink,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
-import { campusLifeService } from "@/services/campus-life";
-import { Club, CampusEvent, ClubMembership, EventRegistration } from "@/types/campus-life.types";
-import { ROUTES } from "@/lib/constants";
+import {
+  calendarApi,
+  clubsApi,
+  marketplaceApi,
+  lostFoundApi,
+  wikiApi,
+  badgesApi,
+} from "@/lib/campusLifeApi";
+import type {
+  CalendarEvent,
+  Club,
+  MarketplaceListing,
+  LostFoundReport,
+  CampusWikiPage,
+  UserBadge,
+} from "@/types/campusLife.types";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { ClubCard } from "@/components/campus-life/ClubCard";
-import { EventCard } from "@/components/campus-life/EventCard";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function CampusLifeHubPage() {
   const user = useAuthStore((s) => s.user);
 
   const [loading, setLoading] = useState(true);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
-  const [events, setEvents] = useState<CampusEvent[]>([]);
-  const [memberships, setMemberships] = useState<ClubMembership[]>([]);
-  const [registrations, setRegistrations] = useState<EventRegistration[]>([]);
+  const [recentListings, setRecentListings] = useState<MarketplaceListing[]>([]);
+  const [recentReports, setRecentReports] = useState<LostFoundReport[]>([]);
+  const [wikiArticles, setWikiArticles] = useState<CampusWikiPage[]>([]);
+  const [myBadges, setMyBadges] = useState<UserBadge[]>([]);
 
   useEffect(() => {
-    async function loadData() {
+    async function loadHubData() {
       setLoading(true);
       try {
-        const [allClubs, allEvents, myMems, myRegs] = await Promise.all([
-          campusLifeService.getClubs(),
-          campusLifeService.getEvents({ upcomingOnly: true }),
-          campusLifeService.getMyClubMemberships(),
-          campusLifeService.getMyEventRegistrations(),
+        const [evts, clbs, mkt, lf, wk, bg] = await Promise.all([
+          calendarApi.getEvents().catch(() => []),
+          clubsApi.getAllClubs().catch(() => []),
+          marketplaceApi.searchListings({ status: "ACTIVE" }).catch(() => []),
+          lostFoundApi.searchReports({ status: "OPEN" }).catch(() => []),
+          wikiApi.searchPages({ status: "PUBLISHED" }).catch(() => []),
+          badgesApi.getMyBadges().catch(() => []),
         ]);
-        setClubs(allClubs);
-        setEvents(allEvents);
-        setMemberships(myMems);
-        setRegistrations(myRegs);
+        setUpcomingEvents(evts.slice(0, 3));
+        setClubs(clbs.slice(0, 4));
+        setRecentListings(mkt.slice(0, 4));
+        setRecentReports(lf.slice(0, 3));
+        setWikiArticles(wk.slice(0, 3));
+        setMyBadges(bg);
       } catch (err) {
-        console.error("Failed to load Campus Life Hub data:", err);
+        console.error("Failed to load hub data:", err);
       } finally {
         setLoading(false);
       }
     }
-    loadData();
-  }, [user?.id]);
+    loadHubData();
+  }, []);
 
-  const joinedClubIds = new Set(memberships.map((m) => m.clubId));
-  const registeredEventIds = new Set(registrations.map((r) => r.eventId));
-
-  const quickNavCards = [
+  const coreModules = [
     {
-      title: "College Clubs",
-      description: "9 College-wide societies & student organizations across tech, arts, culture & sports.",
-      href: ROUTES.CAMPUS_LIFE_CLUBS,
-      icon: Users,
-      badge: "9 Active Clubs",
-      color: "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20",
-    },
-    {
-      title: "Campus Events",
-      description: "Techno-cultural festivals, hackathons, guest lectures, and competitions.",
-      href: ROUTES.CAMPUS_LIFE_EVENTS,
+      title: "Academic Calendar",
+      description: "Official schedule for exams, semester deadlines, campus holidays, and academic milestones.",
+      href: "/campus-life/calendar",
       icon: Calendar,
-      badge: `${events.length} Upcoming`,
+      badge: `${upcomingEvents.length} Upcoming`,
       color: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20",
     },
     {
-      title: "Sports & Athletics",
-      description: "Intramural tournaments, stadium grounds, court schedules, and varsity practice.",
-      href: ROUTES.CAMPUS_LIFE_SPORTS,
-      icon: Trophy,
-      badge: "Council Hub",
+      title: "Student Clubs & Events",
+      description: "Explore technical societies, cultural chapters, sports teams, and upcoming club activities.",
+      href: "/campus-life/clubs",
+      icon: Users,
+      badge: `${clubs.length} Active Clubs`,
+      color: "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20",
+    },
+    {
+      title: "Peer Marketplace",
+      description: "Buy and sell textbooks, scientific calculators, stationery, and hostel essentials with classmates.",
+      href: "/campus-life/marketplace",
+      icon: ShoppingBag,
+      badge: `${recentListings.length} Active Listings`,
       color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
     },
     {
-      title: "Campus Facilities",
-      description: "Central Library, Advanced Computing Center, Auditoriums, and Health Center.",
-      href: ROUTES.CAMPUS_LIFE_FACILITIES,
-      icon: Building,
-      badge: "6 Facilities",
-      color: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
-    },
-    {
-      title: "Lost & Found",
-      description: "Report lost belongings or claim items deposited at central campus desks.",
-      href: ROUTES.CAMPUS_LIFE_LOST_FOUND,
-      icon: Search,
-      badge: "Safe Recovery",
-      color: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
-    },
-    {
-      title: "Student Marketplace",
-      description: "Peer-to-peer exchange for textbooks, scientific calculators, and room essentials.",
-      href: ROUTES.CAMPUS_LIFE_MARKETPLACE,
-      icon: ShoppingBag,
-      badge: "Student P2P",
+      title: "Lost & Found Portal",
+      description: "Report missing items or help fellow students recover misplaced cards, IDs, keys, and devices.",
+      href: "/campus-life/lost-found",
+      icon: HelpCircle,
+      badge: `${recentReports.length} Open Reports`,
       color: "text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20",
     },
     {
-      title: "Campus Transport",
-      description: "Bus routes, stops, schedules, and morning/evening campus commuter routes.",
-      href: ROUTES.CAMPUS_LIFE_TRANSPORT,
-      icon: Bus,
-      badge: "4 Routes",
-      color: "text-teal-600 dark:text-teal-400 bg-teal-500/10 border-teal-500/20",
-    },
-    {
-      title: "Hostel Information",
-      description: "Residential blocks (A–E), amenities, mess timings, and warden contacts.",
-      href: ROUTES.CAMPUS_LIFE_HOSTEL,
-      icon: Home,
-      badge: "Blocks A–E",
-      color: "text-orange-600 dark:text-orange-400 bg-orange-500/10 border-orange-500/20",
-    },
-    {
-      title: "Campus Directory",
-      description: "Key administrative offices, examination cell, student welfare, and helpdesks.",
-      href: ROUTES.CAMPUS_LIFE_DIRECTORY,
+      title: "Campus Wiki & Guide",
+      description: "Crowdsourced knowledge base for lab survival, exam prep, hostel tips, and campus navigation.",
+      href: "/campus-life/wiki",
       icon: BookOpen,
-      badge: "Important Desks",
-      color: "text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+      badge: `${wikiArticles.length} Guides`,
+      color: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+    },
+    {
+      title: "Achievement Badges",
+      description: "Earn community points and collect badges for answering questions, publishing guides, and participation.",
+      href: "/campus-life/badges",
+      icon: Award,
+      badge: `${myBadges.length} Earned`,
+      color: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",
     },
   ];
 
   return (
-    <div className="container mx-auto max-w-7xl py-8 px-4 space-y-10">
+    <div className="container mx-auto max-w-7xl py-8 px-4 space-y-10 animate-in fade-in duration-300">
       {/* Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-900 p-8 sm:p-10 text-white shadow-xl border border-indigo-900/40">
-        <div className="absolute right-0 top-0 -mr-20 -mt-20 h-80 w-80 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
-        <div className="relative z-10 max-w-3xl space-y-3">
+      <div className="rounded-3xl bg-gradient-to-br from-primary/15 via-accent/10 to-primary/5 border border-border/60 p-6 md:p-10 backdrop-blur-md relative overflow-hidden shadow-sm">
+        <div className="max-w-3xl space-y-3 relative z-10">
           <div className="flex items-center gap-2">
-            <Badge className="bg-purple-500/20 text-purple-200 border-purple-400/30 px-3 py-0.5 text-xs font-semibold">
-              <Sparkles className="h-3 w-3 mr-1" />
-              College-Wide Student Life
-            </Badge>
-            <Badge className="bg-indigo-500/20 text-indigo-200 border-indigo-400/30 px-3 py-0.5 text-xs font-semibold">
-              CampusNexus Experience
-            </Badge>
+            <span className="p-2 rounded-xl bg-primary/20 text-primary">
+              <Compass className="w-5 h-5" />
+            </span>
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">
+              Campus Life Ecosystem
+            </span>
           </div>
-
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-            Campus Life Hub
+          <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight">
+            Welcome to Campus Life, {user?.fullName?.split(" ")[0] || "Student"}!
           </h1>
-          <p className="text-sm sm:text-base text-indigo-100/90 leading-relaxed max-w-2xl">
-            Your centralized portal for student organizations, flagship festivals, sports facilities, peer marketplace, transport, and campus amenities.
+          <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
+            Your central gateway to academic schedules, student organizations, peer trade, lost & found recoveries, and campus knowledge.
           </p>
-
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <Link
-              href={ROUTES.CAMPUS_LIFE_CLUBS}
-              className={buttonVariants({ variant: "default", size: "sm" }) + " bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Explore All 9 Clubs
-            </Link>
-            <Link
-              href={ROUTES.CAMPUS_LIFE_EVENTS}
-              className={buttonVariants({ variant: "outline", size: "sm" }) + " bg-white/10 border-white/20 text-white hover:bg-white/20"}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              View Upcoming Events
-            </Link>
-          </div>
         </div>
       </div>
 
-      {/* Personalized Dashboard: My Campus Life Widget */}
-      {user && (memberships.length > 0 || registrations.length > 0) && (
-        <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Compass className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-bold text-foreground">My Campus Life</h2>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {memberships.length} Clubs • {registrations.length} Event Registrations
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* My Clubs Widget */}
-            <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5 text-purple-500" />
-                  My Joined Clubs ({memberships.length})
-                </span>
-                <Link
-                  href={ROUTES.CAMPUS_LIFE_CLUBS}
-                  className="text-[11px] text-primary hover:underline font-medium"
-                >
-                  Manage
-                </Link>
-              </div>
-
-              {memberships.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">You have not joined any clubs yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {memberships.map((m) => (
-                    <Link
-                      key={m.id}
-                      href={ROUTES.CAMPUS_LIFE_CLUB_DETAIL(m.clubId)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-card border border-border/80 hover:border-primary/50 transition-colors"
-                    >
-                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      <span>{m.clubName}</span>
-                      {m.role === "LEADER" && (
-                        <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[9px] py-0 px-1">
-                          Leader
-                        </Badge>
-                      )}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* My Registrations Widget */}
-            <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Ticket className="h-3.5 w-3.5 text-blue-500" />
-                  My Registered Events ({registrations.length})
-                </span>
-                <Link
-                  href={ROUTES.CAMPUS_LIFE_EVENTS}
-                  className="text-[11px] text-primary hover:underline font-medium"
-                >
-                  Browse Events
-                </Link>
-              </div>
-
-              {registrations.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No upcoming registered events.</p>
-              ) : (
-                <div className="space-y-1.5 pt-1">
-                  {registrations.slice(0, 3).map((r) => (
-                    <Link
-                      key={r.id}
-                      href={ROUTES.CAMPUS_LIFE_EVENT_DETAIL(r.eventId)}
-                      className="flex items-center justify-between text-xs p-2 rounded-lg bg-card border border-border/60 hover:border-primary/50 transition-colors"
-                    >
-                      <span className="font-medium text-foreground truncate max-w-[200px]">{r.eventTitle}</span>
-                      <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30">
-                        Confirmed
-                      </Badge>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Campus Life Modules Navigation Grid */}
+      {/* 6 Core Modules Grid */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Explore Campus Life Modules
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Everything you need for your day-to-day student journey at CampusNexus.
-          </p>
+          <h2 className="text-xl font-bold text-foreground">Explore Campus Life</h2>
+          <p className="text-xs text-muted-foreground">Select a module to get started</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {quickNavCards.map((card, i) => {
-            const Icon = card.icon;
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {coreModules.map((mod) => {
+            const Icon = mod.icon;
             return (
-              <Link
-                key={i}
-                href={card.href}
-                className="group relative flex flex-col justify-between rounded-2xl border border-border/80 bg-card p-6 shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className={`p-2.5 rounded-xl border ${card.color}`}>
-                      <Icon className="h-5 w-5" />
+              <Link key={mod.href} href={mod.href} className="group block">
+                <Card className="h-full border-border/60 hover:border-primary/50 hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+                  <CardHeader className="p-6 pb-4">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className={`p-3 rounded-2xl border ${mod.color}`}>
+                        <Icon className="w-6 h-6" />
+                      </div>
+                      <Badge variant="outline" className="text-xs font-semibold">
+                        {mod.badge}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-[11px] font-semibold">
-                      {card.badge}
-                    </Badge>
+                    <CardTitle className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                      {mod.title}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      {mod.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <div className="p-6 pt-0 flex items-center text-xs font-semibold text-primary gap-1 group-hover:translate-x-1 transition-transform">
+                    <span>Enter {mod.title}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </div>
-
-                  <div>
-                    <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
-                      {card.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      {card.description}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-border/40 flex items-center justify-between text-xs font-semibold text-primary">
-                  <span>Open {card.title}</span>
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </div>
+                </Card>
               </Link>
             );
           })}
         </div>
       </div>
 
-      {/* Featured Clubs Spotlight */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-foreground">
-              College-Wide Clubs
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              All 9 campus societies are open to every student regardless of department or year.
-            </p>
-          </div>
-          <Link
-            href={ROUTES.CAMPUS_LIFE_CLUBS}
-            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-          >
-            View All 9 Clubs <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
+      {/* Quick Live Preview Rows */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
+        {/* Academic Calendar Events */}
+        <Card className="border-border/60">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-500" /> Upcoming Calendar Events
+              </CardTitle>
+              <CardDescription className="text-xs">Upcoming academic deadlines and holidays</CardDescription>
+            </div>
+            <Link href="/campus-life/calendar" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              View All
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {loading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : upcomingEvents.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-4 text-center">No upcoming events found.</p>
+            ) : (
+              upcomingEvents.map((evt) => (
+                <div key={evt.id} className="p-3.5 rounded-xl bg-muted/40 border border-border/50 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <Badge variant="outline" className="text-[10px]">
+                      {evt.eventType}
+                    </Badge>
+                    <h4 className="font-semibold text-sm text-foreground">{evt.title}</h4>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(evt.startDate).toLocaleDateString()}
+                      {evt.endDate ? ` - ${new Date(evt.endDate).toLocaleDateString()}` : ""}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-56 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {clubs.slice(0, 3).map((club) => (
-              <ClubCard
-                key={club.id}
-                club={club}
-                isMemberInitial={joinedClubIds.has(club.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Upcoming Campus & Club Events */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-foreground">
-              Upcoming Events & Festivals
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Hackathons, inter-year sports tournaments, debate fests, and cultural nights.
-            </p>
-          </div>
-          <Link
-            href={ROUTES.CAMPUS_LIFE_EVENTS}
-            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-          >
-            All Events <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-56 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {events.slice(0, 3).map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                isRegisteredInitial={registeredEventIds.has(event.id)}
-              />
-            ))}
-          </div>
-        )}
+        {/* Latest Marketplace Listings */}
+        <Card className="border-border/60">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-emerald-500" /> Fresh Marketplace Items
+              </CardTitle>
+              <CardDescription className="text-xs">Recently listed textbooks & items</CardDescription>
+            </div>
+            <Link href="/campus-life/marketplace" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              Browse All
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {loading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : recentListings.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-4 text-center">No active listings available.</p>
+            ) : (
+              recentListings.map((item) => (
+                <div key={item.id} className="p-3.5 rounded-xl bg-muted/40 border border-border/50 flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="font-semibold text-sm text-foreground">{item.title}</h4>
+                    <p className="text-xs text-muted-foreground">
+                      {item.category.replace("_", " ")} • {item.conditionType.replace("_", " ")}
+                    </p>
+                  </div>
+                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
+                    ₹{item.price}
+                  </span>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
+import { toast } from "@/lib/toast";
 
 interface PostCardProps {
   post: Post;
@@ -68,17 +69,16 @@ export function PostCard({ post, isDetailed = false }: PostCardProps) {
   const timeAgo = formatDistanceToNow(new Date(post.createdAt), { addSuffix: true });
 
   const handleDelete = async () => {
-    if (window.confirm("Are you sure you want to delete this post?")) {
-      try {
-        await MockCommunityServiceInstance.deletePost(post.id);
-        store.removeLocalPost(post.id);
-        if (isDetailed) {
-          router.push(ROUTES.COMMUNITY);
-        }
-      } catch (err) {
-        console.error("Failed to delete post:", err);
-        alert("Failed to delete post. Please try again.");
+    try {
+      await MockCommunityServiceInstance.deletePost(post.id);
+      store.removeLocalPost(post.id);
+      toast.success("Post deleted.");
+      if (isDetailed) {
+        router.push(ROUTES.COMMUNITY);
       }
+    } catch (err) {
+      console.error("Failed to delete post:", err);
+      toast.error("Failed to delete post. Please try again.");
     }
   };
 

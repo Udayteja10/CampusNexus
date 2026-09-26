@@ -2,31 +2,43 @@
 
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
-  Users,
   Building2,
   Calendar,
   Clock,
   MapPin,
   Mail,
-  ShieldCheck,
-  CheckCircle2,
-  UserPlus,
-  LogOut,
+  Share2,
   Sparkles,
   ArrowLeft,
-  Crown,
-  ChevronRight,
+  Megaphone,
+  Image as ImageIcon,
+  Trophy,
+  Plus,
+  Trash2,
+  ExternalLink,
+  Info,
+  CalendarDays,
+  X,
+  PlusCircle,
+  Tag,
+  Globe,
+  Camera,
+  Award,
 } from "lucide-react";
-import { Club, CampusEvent, ClubMembership } from "@/types/campus-life.types";
-import { campusLifeService } from "@/services/campus-life";
+import type {
+  Club,
+  ClubAnnouncement,
+  ClubEvent,
+  ClubGalleryItem,
+  ClubAchievement,
+} from "@/types/campusLife.types";
+import { clubsApi } from "@/lib/campusLifeApi";
 import { useAuthStore } from "@/store/auth.store";
-import { ROUTES } from "@/lib/constants";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { EventCard } from "@/components/campus-life/EventCard";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "@/lib/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -36,335 +48,1078 @@ interface ClubDetailPageProps {
 
 export default function ClubDetailPage({ params }: ClubDetailPageProps) {
   const { id } = use(params);
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   const [club, setClub] = useState<Club | null>(null);
-  const [events, setEvents] = useState<CampusEvent[]>([]);
-  const [isMember, setIsMember] = useState(false);
+  const [announcements, setAnnouncements] = useState<ClubAnnouncement[]>([]);
+  const [events, setEvents] = useState<ClubEvent[]>([]);
+  const [gallery, setGallery] = useState<ClubGalleryItem[]>([]);
+  const [achievements, setAchievements] = useState<ClubAchievement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "announcements" | "events" | "gallery" | "achievements">("overview");
+
+  // Authorization checks
+  const isAdmin = user?.role === "ADMIN";
+  const isPresident = club?.currentPresident?.userId === user?.id;
+  const isClubActive = club?.status === "ACTIVE";
+  const canManage = (club?.canManage ?? (isAdmin || isPresident)) && (isClubActive || isAdmin);
+
+  // Modals for Club Managers (Admin or President)
+  const [isAnnounceModalOpen, setIsAnnounceModalOpen] = useState(false);
+  const [announceTitle, setAnnounceTitle] = useState("");
+  const [announceContent, setAnnounceContent] = useState("");
+
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    title: "",
+    description: "",
+    venue: "",
+    startDateTime: "",
+    endDateTime: "",
+    registrationLink: "",
+    imageUrl: "",
+  });
+
+  const [isGalleryModalOpen, setIsGalleryModalOpen] = useState(false);
+  const [galleryForm, setGalleryForm] = useState({
+    imageUrl: "",
+    caption: "",
+  });
+
+  const [isAchievementModalOpen, setIsAchievementModalOpen] = useState(false);
+  const [achievementForm, setAchievementForm] = useState({
+    title: "",
+    description: "",
+    achievementDate: "",
+    imageUrl: "",
+  });
+
+  const clubIdNum = parseInt(id, 10);
+
+  const loadClubData = async () => {
+    if (isNaN(clubIdNum)) {
+      router.push("/campus-life/clubs");
+      return;
+    }
+    setLoading(true);
+    try {
+      const [clubData, annData, evData, galData, achData] = await Promise.all([
+        clubsApi.getClubById(clubIdNum),
+        clubsApi.getAnnouncements(clubIdNum),
+        clubsApi.getEvents(clubIdNum),
+        clubsApi.getGallery(clubIdNum),
+        clubsApi.getAchievements(clubIdNum),
+      ]);
+      setClub(clubData);
+      setAnnouncements(annData);
+      setEvents(evData);
+      setGallery(galData);
+      setAchievements(achData);
+    } catch (err: any) {
+      console.error("Failed to load club details:", err);
+      toast.error(err.response?.data?.message || "Failed to load club details");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const [c, clubEvts, memStatus] = await Promise.all([
-          campusLifeService.getClubById(id),
-          campusLifeService.getClubEvents(id),
-          campusLifeService.isClubMember(id),
-        ]);
-        if (!c) {
-          notFound();
-        }
-        setClub(c);
-        setEvents(clubEvts);
-        setIsMember(memStatus);
-      } catch (err) {
-        console.error("Failed to load club details:", err);
-      } finally {
-        setLoading(false);
-      }
+    loadClubData();
+  }, [id]);
+
+  // Actions
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!announceTitle.trim() || !announceContent.trim()) {
+      toast.error("Please fill in title and content");
+      return;
     }
-    loadData();
-  }, [id, user?.id]);
+    try {
+      await clubsApi.createAnnouncement(clubIdNum, {
+        title: announceTitle.trim(),
+        content: announceContent.trim(),
+      });
+      toast.success("Announcement posted successfully!");
+      setAnnounceTitle("");
+      setAnnounceContent("");
+      setIsAnnounceModalOpen(false);
+      const updated = await clubsApi.getAnnouncements(clubIdNum);
+      setAnnouncements(updated);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to post announcement");
+    }
+  };
+
+  const handleDeleteAnnouncement = async (annId: number) => {
+    try {
+      await clubsApi.deleteAnnouncement(clubIdNum, annId);
+      toast.success("Announcement deleted");
+      setAnnouncements((prev) => prev.filter((a) => a.id !== annId));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete");
+    }
+  };
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventForm.title || !eventForm.startDateTime || !eventForm.endDateTime) {
+      toast.error("Title, start time, and end time are required");
+      return;
+    }
+    try {
+      await clubsApi.createEvent(clubIdNum, {
+        title: eventForm.title,
+        description: eventForm.description,
+        venue: eventForm.venue,
+        startDateTime: eventForm.startDateTime,
+        endDateTime: eventForm.endDateTime,
+        registrationLink: eventForm.registrationLink || undefined,
+        imageUrl: eventForm.imageUrl || undefined,
+      });
+      toast.success("Event created successfully!");
+      setIsEventModalOpen(false);
+      setEventForm({
+        title: "",
+        description: "",
+        venue: "",
+        startDateTime: "",
+        endDateTime: "",
+        registrationLink: "",
+        imageUrl: "",
+      });
+      const updated = await clubsApi.getEvents(clubIdNum);
+      setEvents(updated);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to create event");
+    }
+  };
+
+  const handleDeleteEvent = async (evId: number) => {
+    try {
+      await clubsApi.deleteEvent(clubIdNum, evId);
+      toast.success("Event deleted");
+      setEvents((prev) => prev.filter((e) => e.id !== evId));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete");
+    }
+  };
+
+  const handleAddGalleryItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!galleryForm.imageUrl.trim()) {
+      toast.error("Image URL is required");
+      return;
+    }
+    try {
+      await clubsApi.addGalleryItem(clubIdNum, {
+        imageUrl: galleryForm.imageUrl.trim(),
+        caption: galleryForm.caption.trim() || undefined,
+      });
+      toast.success("Photo added to gallery!");
+      setIsGalleryModalOpen(false);
+      setGalleryForm({ imageUrl: "", caption: "" });
+      const updated = await clubsApi.getGallery(clubIdNum);
+      setGallery(updated);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to add photo");
+    }
+  };
+
+  const handleDeleteGalleryItem = async (photoId: number) => {
+    try {
+      await clubsApi.deleteGalleryItem(clubIdNum, photoId);
+      toast.success("Photo removed");
+      setGallery((prev) => prev.filter((g) => g.id !== photoId));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete");
+    }
+  };
+
+  const handleAddAchievement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!achievementForm.title.trim() || !achievementForm.achievementDate) {
+      toast.error("Title and date are required");
+      return;
+    }
+    try {
+      await clubsApi.addAchievement(clubIdNum, {
+        title: achievementForm.title.trim(),
+        description: achievementForm.description.trim() || undefined,
+        achievementDate: achievementForm.achievementDate,
+        imageUrl: achievementForm.imageUrl.trim() || undefined,
+      });
+      toast.success("Achievement added!");
+      setIsAchievementModalOpen(false);
+      setAchievementForm({ title: "", description: "", achievementDate: "", imageUrl: "" });
+      const updated = await clubsApi.getAchievements(clubIdNum);
+      setAchievements(updated);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to add achievement");
+    }
+  };
+
+  const handleDeleteAchievement = async (achId: number) => {
+    try {
+      await clubsApi.deleteAchievement(clubIdNum, achId);
+      toast.success("Achievement deleted");
+      setAchievements((prev) => prev.filter((a) => a.id !== achId));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete");
+    }
+  };
 
   if (loading) {
     return (
-      <div className="container mx-auto max-w-5xl py-8 px-4 space-y-6">
-        <Skeleton className="h-48 w-full rounded-2xl" />
+      <div className="container mx-auto max-w-6xl py-8 px-4 space-y-6">
+        <Skeleton className="h-64 w-full rounded-2xl" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Skeleton className="h-72 md:col-span-2 rounded-xl" />
-          <Skeleton className="h-72 rounded-xl" />
+          <Skeleton className="h-80 md:col-span-2 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
         </div>
       </div>
     );
   }
 
   if (!club) {
-    notFound();
+    return (
+      <div className="container mx-auto max-w-6xl py-12 px-4 text-center">
+        <h2 className="text-2xl font-bold text-foreground">Club Not Found</h2>
+        <p className="text-muted-foreground mt-2">The requested club could not be loaded.</p>
+        <Link href="/campus-life/clubs" className={`mt-4 inline-flex items-center ${buttonVariants({ variant: "default" })}`}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Clubs
+        </Link>
+      </div>
+    );
   }
 
-  const handleToggleMembership = async () => {
-    if (!user) {
-      toast.error("Please sign in to manage club memberships.");
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      if (isMember) {
-        await campusLifeService.leaveClub(club.id);
-        setIsMember(false);
-        setClub((prev) => (prev ? { ...prev, membershipCount: Math.max(0, prev.membershipCount - 1) } : null));
-        toast.success(`You have left ${club.name}`);
-      } else {
-        await campusLifeService.joinClub(club.id);
-        setIsMember(true);
-        setClub((prev) => (prev ? { ...prev, membershipCount: prev.membershipCount + 1 } : null));
-        toast.success(`Welcome to ${club.name}!`);
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update membership");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   return (
-    <div className="container mx-auto max-w-5xl py-8 px-4 space-y-8">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Link href={ROUTES.CAMPUS_LIFE} className="hover:text-foreground transition-colors">
-          Campus Life
+    <div className="container mx-auto max-w-6xl py-8 px-4 space-y-6 animate-in fade-in duration-300">
+      {/* Back button & Role Controls Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <Link
+          href="/campus-life/clubs"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm font-medium"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to All Clubs
         </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link href={ROUTES.CAMPUS_LIFE_CLUBS} className="hover:text-foreground transition-colors">
-          Clubs
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-semibold">{club.name}</span>
+
+        {/* Status / Role Indicator Badges */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <Link href="/admin/clubs">
+              <Badge className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-1 px-3 text-xs gap-1 cursor-pointer">
+                <span>🛡️ Admin Controls</span>
+              </Badge>
+            </Link>
+          )}
+          {isPresident && !isAdmin && (
+            <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-medium py-1 px-3 text-xs gap-1">
+              <span>👑 President Controls</span>
+            </Badge>
+          )}
+          {club.status === "INACTIVE" && (
+            <Badge variant="destructive" className="py-1 px-3 text-xs">
+              Deactivated Club
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-900 p-8 text-white shadow-xl border border-indigo-900/40">
-        <div className="relative z-10 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-purple-500/20 text-purple-200 border-purple-400/30 px-3 py-0.5 text-xs font-semibold">
-                {club.category}
-              </Badge>
-              <Badge className="bg-emerald-500/20 text-emerald-200 border-emerald-400/30 px-3 py-0.5 text-xs font-semibold">
-                College-Wide Club
-              </Badge>
+      {/* Leadership Alert for Authorized Users */}
+      {isAdmin && (
+        <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-400">
+              <Building2 className="w-5 h-5" />
             </div>
-
-            <Button
-              variant={isMember ? "outline" : "default"}
-              size="sm"
-              className={isMember ? "bg-white/10 border-white/20 text-white hover:bg-white/20" : "bg-primary text-primary-foreground font-bold"}
-              onClick={handleToggleMembership}
-              disabled={actionLoading}
-            >
-              {actionLoading ? (
-                "..."
-              ) : isMember ? (
-                <>
-                  <LogOut className="h-4 w-4 mr-1.5" />
-                  Leave Club
-                </>
-              ) : (
-                <>
-                  <UserPlus className="h-4 w-4 mr-1.5" />
-                  Join {club.name}
-                </>
-              )}
-            </Button>
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Global Administrator Controls Active</h4>
+              <p className="text-xs text-muted-foreground">
+                You have unrestricted administrative authority to manage club content, settings, and assign student presidents.
+              </p>
+            </div>
           </div>
+          <Link href="/admin/clubs">
+            <Button size="sm" variant="outline" className="text-xs whitespace-nowrap border-purple-500/30 text-purple-400 hover:bg-purple-500/10">
+              Manage Club in Admin
+            </Button>
+          </Link>
+        </div>
+      )}
 
-          <div className="space-y-1">
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-              {club.name}
-            </h1>
-            <p className="text-sm sm:text-base text-indigo-200/90 font-medium">
-              {club.tagline}
+      {isPresident && !isAdmin && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-500">
+            <Award className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">Club President Leadership Enabled</h4>
+            <p className="text-xs text-muted-foreground">
+              You are the designated Student President for {club.name}. You can post announcements, schedule events, add gallery memories, and record achievements.
             </p>
           </div>
+        </div>
+      )}
 
-          <div className="flex flex-wrap items-center gap-6 pt-2 text-xs text-indigo-100/80 border-t border-white/10">
-            <div className="flex items-center gap-1.5">
-              <Users className="h-4 w-4 text-purple-300" />
-              <span><strong className="text-white">{club.membershipCount}</strong> Members</span>
+      {/* Inactive club warning */}
+      {club.status === "INACTIVE" && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-destructive/20 text-destructive">
+            <Info className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-destructive">Club Deactivated</h4>
+            <p className="text-xs text-muted-foreground">
+              This club is currently inactive. New announcements, events, photos, and achievements cannot be published until reactivated by an administrator.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Hero Header */}
+      <div className="relative rounded-3xl overflow-hidden border border-border/60 bg-card shadow-sm">
+        {/* Cover banner */}
+        <div className="h-48 md:h-64 w-full bg-gradient-to-r from-primary/30 via-accent/20 to-primary/10 relative">
+          {club.coverUrl && (
+            <img
+              src={club.coverUrl}
+              alt={club.name}
+              className="w-full h-full object-cover"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+        </div>
+
+        {/* Club Details Overlay */}
+        <div className="p-6 md:p-8 -mt-16 md:-mt-20 relative flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-start md:items-end gap-5">
+            {club.logoUrl ? (
+              <img
+                src={club.logoUrl}
+                alt={club.name}
+                className="w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover border-4 border-background shadow-md bg-background"
+              />
+            ) : (
+              <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-primary/20 border-4 border-background shadow-md flex items-center justify-center font-bold text-3xl text-primary">
+                {club.name.charAt(0)}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <Badge variant="outline" className="bg-background/80 backdrop-blur-sm border-primary/30 text-primary font-semibold">
+                  {club.category}
+                </Badge>
+                <Badge
+                  variant="secondary"
+                  className={
+                    club.status === "ACTIVE"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                      : "bg-destructive/10 text-destructive border border-destructive/20"
+                  }
+                >
+                  {club.status}
+                </Badge>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
+                {club.name}
+              </h1>
+              {club.contactEmail && (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Mail className="w-4 h-4 text-primary/70" /> {club.contactEmail}
+                </p>
+              )}
             </div>
-            {club.meetingSchedule && (
-              <div className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-purple-300" />
-                <span>{club.meetingSchedule}</span>
-              </div>
-            )}
-            {club.roomVenue && (
-              <div className="flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-purple-300" />
-                <span>{club.roomVenue}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Main Content Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Left 2 Cols: About, Activities, Club Events */}
-        <div className="md:col-span-2 space-y-6">
-          {/* About Section */}
-          <Card className="border-border">
-            <CardContent className="p-6 space-y-3">
-              <h2 className="text-base font-bold text-foreground">About the Society</h2>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                {club.about}
-              </p>
-            </CardContent>
-          </Card>
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-border space-x-1 sm:space-x-4 overflow-x-auto pb-1">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-2.5 font-medium text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === "overview"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <Info className="w-4 h-4" /> Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("announcements")}
+          className={`px-4 py-2.5 font-medium text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === "announcements"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <Megaphone className="w-4 h-4" /> Announcements
+          {announcements.length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-background/20 font-bold">
+              {announcements.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("events")}
+          className={`px-4 py-2.5 font-medium text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === "events"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" /> Events
+          {events.length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-background/20 font-bold">
+              {events.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("gallery")}
+          className={`px-4 py-2.5 font-medium text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === "gallery"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <ImageIcon className="w-4 h-4" /> Gallery
+          {gallery.length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-background/20 font-bold">
+              {gallery.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("achievements")}
+          className={`px-4 py-2.5 font-medium text-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === "achievements"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          <Trophy className="w-4 h-4" /> Achievements
+          {achievements.length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-background/20 font-bold">
+              {achievements.length}
+            </span>
+          )}
+        </button>
+      </div>
 
-          {/* Activities List */}
-          {club.activities && club.activities.length > 0 && (
-            <Card className="border-border">
-              <CardContent className="p-6 space-y-3">
-                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  Key Activities & Annual Programs
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  {club.activities.map((act, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 text-xs p-3 rounded-xl bg-muted/40 border border-border/50 text-foreground"
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                      <span className="font-medium">{act}</span>
-                    </div>
-                  ))}
-                </div>
+      {/* Tab Content */}
+      {/* 1. OVERVIEW */}
+      {activeTab === "overview" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-200">
+          <div className="md:col-span-2 space-y-6">
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="text-xl">About {club.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-foreground/90 leading-relaxed whitespace-pre-line text-sm md:text-base">
+                  {club.description || "No description provided for this club."}
+                </p>
               </CardContent>
             </Card>
-          )}
 
-          {/* Associated Club Events */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                Events Organized by {club.name} ({events.length})
-              </h2>
-            </div>
-
-            {events.length === 0 ? (
-              <div className="p-8 text-center rounded-xl border border-dashed border-border text-xs text-muted-foreground">
-                No active events scheduled by {club.name} at this moment.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {events.map((evt) => (
-                  <EventCard key={evt.id} event={evt} />
-                ))}
-              </div>
+            {/* Quick Latest Announcements */}
+            {announcements.length > 0 && (
+              <Card className="border-border/60">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle className="text-lg">Recent Announcement</CardTitle>
+                    <CardDescription>Latest update from the club</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("announcements")}>
+                    View All
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 rounded-xl bg-muted/40 border border-border/50">
+                    <h4 className="font-semibold text-foreground">{announcements[0].title}</h4>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-3">
+                      {announcements[0].content}
+                    </p>
+                    <p className="text-xs text-primary/70 mt-2">
+                      Posted on {new Date(announcements[0].createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
-        </div>
 
-        {/* Right 1 Col: Leadership & Coordinator info */}
-        <div className="space-y-6">
-          {/* Leadership Roster */}
-          <Card className="border-border">
-            <CardContent className="p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <Crown className="h-4 w-4 text-amber-500" />
-                <h2 className="text-sm font-bold text-foreground">Student Leadership</h2>
-              </div>
-
-              <div className="space-y-3">
-                {club.leaders.map((leader) => (
-                  <div
-                    key={leader.id}
-                    className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-1 text-xs"
-                  >
+          <div className="space-y-6">
+            {/* Club Leadership / President Card */}
+            <Card className="border-border/60">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="text-amber-500">👑</span>
+                  <span>Club Leadership</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {club.currentPresident ? (
+                  <div className="p-3.5 rounded-xl bg-muted/40 border border-border/50 space-y-2">
                     <div className="flex items-center justify-between">
-                      <strong className="text-foreground font-semibold">{leader.name}</strong>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30">
-                          {leader.roleTitle}
-                        </Badge>
-                        {user?.role === "ADMIN" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
-                            onClick={async () => {
-                              if (!confirm(`Demote ${leader.name} from leader to regular member?`)) return;
-                              try {
-                                await campusLifeService.removeClubLeader(club.id, leader.id);
-                                const updated = await campusLifeService.getClubById(club.id);
-                                setClub(updated);
-                                toast.success(`Leader removed.`);
-                              } catch (err: unknown) {
-                                const msg = err instanceof Error ? err.message : "Failed to remove leader";
-                                toast.error(msg);
-                              }
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        )}
-                      </div>
+                      <span className="text-xs font-semibold text-primary uppercase tracking-wider">
+                        {club.currentPresident.designation}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-background">
+                        Active
+                      </Badge>
                     </div>
-                    {leader.department && (
-                      <p className="text-[11px] text-muted-foreground">
-                        {leader.department} {leader.year ? `• Year ${leader.year}` : ""}
+                    <div>
+                      <h4 className="font-bold text-sm text-foreground">
+                        {club.currentPresident.fullName || club.currentPresident.username}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        @{club.currentPresident.username}
+                        {club.currentPresident.htno && ` • ${club.currentPresident.htno}`}
+                      </p>
+                      {club.currentPresident.email && (
+                        <p className="text-xs text-primary/80 mt-1">
+                          {club.currentPresident.email}
+                        </p>
+                      )}
+                    </div>
+                    {club.currentPresident.assignedAt && (
+                      <p className="text-[10px] text-muted-foreground pt-1 border-t border-border/40">
+                        Appointed on {new Date(club.currentPresident.assignedAt).toLocaleDateString()}
                       </p>
                     )}
                   </div>
-                ))}
-              </div>
-
-              {user?.role === "ADMIN" && (
-                <div className="pt-2 border-t border-border/50">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs font-semibold"
-                    onClick={async () => {
-                      const leaderName = prompt("Enter Student Leader Name:");
-                      if (!leaderName) return;
-                      const roleTitle = prompt("Enter Leadership Title (e.g. President, Convener):", "Student Leader");
-                      if (!roleTitle) return;
-                      const customId = `lead-${Date.now()}`;
-                      try {
-                        await campusLifeService.assignClubLeader(club.id, customId, roleTitle);
-                        const updated = await campusLifeService.getClubById(club.id);
-                        setClub(updated);
-                        toast.success(`${leaderName} assigned as ${roleTitle}!`);
-                      } catch (err: unknown) {
-                        const msg = err instanceof Error ? err.message : "Failed to assign leader";
-                        toast.error(msg);
-                      }
-                    }}
-                  >
-                    <Crown className="h-3.5 w-3.5 mr-1 text-amber-500" />
-                    Assign Leader (Admin)
-                  </Button>
-                </div>
-              )}
-
-              {club.facultyCoordinator && (
-                <div className="pt-3 border-t border-border/50 text-xs space-y-1">
-                  <span className="text-[11px] font-bold text-foreground block">
-                    Faculty Coordinator:
-                  </span>
-                  <p className="text-muted-foreground">{club.facultyCoordinator}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Contact Details */}
-          <Card className="border-border">
-            <CardContent className="p-6 space-y-3 text-xs">
-              <h2 className="text-sm font-bold text-foreground">Club Contact & Office</h2>
-              <div className="space-y-2 text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
-                  <span className="truncate">{club.contactEmail}</span>
-                </div>
-                {club.roomVenue && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-                    <span>{club.roomVenue}</span>
+                ) : (
+                  <div className="p-4 rounded-xl bg-muted/30 border border-dashed border-border text-center space-y-1">
+                    <p className="text-xs text-muted-foreground">No active president assigned.</p>
+                    {isAdmin && (
+                      <Link href="/admin/clubs">
+                        <Button size="sm" variant="link" className="text-xs p-0 text-primary">
+                          Assign President
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="text-base">Club Info</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3.5 text-sm">
+                <div className="flex items-center justify-between py-2 border-b border-border/40">
+                  <span className="text-muted-foreground">Category</span>
+                  <Badge variant="outline">{club.category}</Badge>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-border/40">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className={club.status === "ACTIVE" ? "font-medium text-emerald-600 dark:text-emerald-400" : "font-medium text-destructive"}>
+                    {club.status}
+                  </span>
+                </div>
+                {club.contactEmail && (
+                  <div className="flex items-center justify-between py-2 border-b border-border/40">
+                    <span className="text-muted-foreground">Contact</span>
+                    <a href={`mailto:${club.contactEmail}`} className="text-primary hover:underline text-xs">
+                      {club.contactEmail}
+                    </a>
+                  </div>
+                )}
+                {club.socialLinks && (
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-muted-foreground">Links</span>
+                    <a href={club.socialLinks} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs">
+                      <Globe className="w-3.5 h-3.5" /> Visit Link
+                    </a>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* 2. ANNOUNCEMENTS */}
+      {activeTab === "announcements" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Club Announcements</h2>
+              <p className="text-sm text-muted-foreground">Important updates and notices</p>
+            </div>
+            {canManage && (
+              <Button onClick={() => setIsAnnounceModalOpen(true)} className="gap-2">
+                <PlusCircle className="w-4 h-4" /> Post Announcement
+              </Button>
+            )}
+          </div>
+
+          {announcements.length === 0 ? (
+            <Card className="p-8 text-center text-muted-foreground border-dashed">
+              <Megaphone className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
+              <p>No announcements posted yet.</p>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {announcements.map((ann) => (
+                <Card key={ann.id} className="border-border/60 hover:shadow-sm transition-all">
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold text-lg text-foreground">{ann.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Posted on {new Date(ann.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteAnnouncement(ann.id)}
+                          className="text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-foreground/80 mt-3 text-sm whitespace-pre-line leading-relaxed">
+                      {ann.content}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. EVENTS */}
+      {activeTab === "events" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Club Events</h2>
+              <p className="text-sm text-muted-foreground">Upcoming and ongoing activities organized by {club.name}</p>
+            </div>
+            {canManage && (
+              <Button onClick={() => setIsEventModalOpen(true)} className="gap-2">
+                <PlusCircle className="w-4 h-4" /> Add Event
+              </Button>
+            )}
+          </div>
+
+          {events.length === 0 ? (
+            <Card className="p-8 text-center text-muted-foreground border-dashed">
+              <CalendarDays className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
+              <p>No events scheduled currently.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {events.map((evt) => (
+                <Card key={evt.id} className="border-border/60 overflow-hidden flex flex-col justify-between">
+                  <div>
+                    {evt.imageUrl && (
+                      <div className="h-44 w-full overflow-hidden bg-muted">
+                        <img src={evt.imageUrl} alt={evt.title} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <CardHeader className="p-5 pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-lg">{evt.title}</CardTitle>
+                        {canManage && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteEvent(evt.id)}
+                            className="text-destructive hover:bg-destructive/10 -mr-2 -mt-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="space-y-1.5 text-xs text-muted-foreground mt-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-primary" />
+                          <span>{new Date(evt.startDateTime).toLocaleString()} - {new Date(evt.endDateTime).toLocaleString()}</span>
+                        </div>
+                        {evt.venue && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-primary" />
+                            <span>{evt.venue}</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardHeader>
+                    {evt.description && (
+                      <CardContent className="px-5 pb-4 text-sm text-foreground/80">
+                        <p className="line-clamp-3">{evt.description}</p>
+                      </CardContent>
+                    )}
+                  </div>
+                  {evt.registrationLink && (
+                    <div className="p-5 pt-0">
+                      <a
+                        href={evt.registrationLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`w-full gap-2 ${buttonVariants({ variant: "outline", size: "sm" })}`}
+                      >
+                        Register / More Info <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 4. GALLERY */}
+      {activeTab === "gallery" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Club Gallery</h2>
+              <p className="text-sm text-muted-foreground">Photos and memories from past activities</p>
+            </div>
+            {canManage && (
+              <Button onClick={() => setIsGalleryModalOpen(true)} className="gap-2">
+                <Camera className="w-4 h-4" /> Add Photo
+              </Button>
+            )}
+          </div>
+
+          {gallery.length === 0 ? (
+            <Card className="p-8 text-center text-muted-foreground border-dashed">
+              <ImageIcon className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
+              <p>No photos in the gallery yet.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {gallery.map((photo) => (
+                <div key={photo.id} className="group relative rounded-2xl overflow-hidden border border-border/60 aspect-video bg-muted">
+                  <img src={photo.imageUrl} alt={photo.caption || "Club Photo"} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  {photo.caption && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-white text-xs">
+                      {photo.caption}
+                    </div>
+                  )}
+                  {canManage && (
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => handleDeleteGalleryItem(photo.id)}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 5. ACHIEVEMENTS */}
+      {activeTab === "achievements" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Club Achievements</h2>
+              <p className="text-sm text-muted-foreground">Awards, recognitions, and milestones</p>
+            </div>
+            {canManage && (
+              <Button onClick={() => setIsAchievementModalOpen(true)} className="gap-2">
+                <Award className="w-4 h-4" /> Add Achievement
+              </Button>
+            )}
+          </div>
+
+          {achievements.length === 0 ? (
+            <Card className="p-8 text-center text-muted-foreground border-dashed">
+              <Trophy className="w-10 h-10 mx-auto mb-2 text-muted-foreground/50" />
+              <p>No achievements recorded yet.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {achievements.map((ach) => (
+                <Card key={ach.id} className="border-border/60">
+                  <CardContent className="p-5 flex gap-4 items-start">
+                    <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                      <Trophy className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-start justify-between">
+                        <h4 className="font-semibold text-foreground">{ach.title}</h4>
+                        {canManage && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteAchievement(ach.id)}
+                            className="text-destructive hover:bg-destructive/10 -mr-2 -mt-1 h-7 w-7 p-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Achieved on {new Date(ach.achievementDate).toLocaleDateString()}
+                      </p>
+                      {ach.description && (
+                        <p className="text-sm text-foreground/80 pt-1 leading-relaxed">
+                          {ach.description}
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODALS FOR STAFF */}
+      {/* 1. Announcement Modal */}
+      {isAnnounceModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border shadow-xl rounded-2xl max-w-lg w-full p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <h3 className="font-bold text-lg text-foreground">Post Announcement</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsAnnounceModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <form onSubmit={handleCreateAnnouncement} className="space-y-4 pt-4">
+              <div>
+                <label className="text-xs font-semibold text-foreground">Title *</label>
+                <input
+                  type="text"
+                  value={announceTitle}
+                  onChange={(e) => setAnnounceTitle(e.target.value)}
+                  placeholder="e.g. Workshop Registration Open"
+                  required
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Content *</label>
+                <textarea
+                  value={announceContent}
+                  onChange={(e) => setAnnounceContent(e.target.value)}
+                  placeholder="Write the announcement details..."
+                  rows={4}
+                  required
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsAnnounceModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Post</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Event Modal */}
+      {isEventModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border shadow-xl rounded-2xl max-w-xl w-full p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <h3 className="font-bold text-lg text-foreground">Create Club Event</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsEventModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <form onSubmit={handleCreateEvent} className="space-y-4 pt-4">
+              <div>
+                <label className="text-xs font-semibold text-foreground">Event Title *</label>
+                <input
+                  type="text"
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                  placeholder="e.g. Hackathon 2026"
+                  required
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-foreground">Start Date & Time *</label>
+                  <input
+                    type="datetime-local"
+                    value={eventForm.startDateTime}
+                    onChange={(e) => setEventForm({ ...eventForm, startDateTime: e.target.value })}
+                    required
+                    className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-foreground">End Date & Time *</label>
+                  <input
+                    type="datetime-local"
+                    value={eventForm.endDateTime}
+                    onChange={(e) => setEventForm({ ...eventForm, endDateTime: e.target.value })}
+                    required
+                    className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Venue</label>
+                <input
+                  type="text"
+                  value={eventForm.venue}
+                  onChange={(e) => setEventForm({ ...eventForm, venue: e.target.value })}
+                  placeholder="e.g. Auditorium Hall B"
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Description</label>
+                <textarea
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                  placeholder="Details about the event..."
+                  rows={3}
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Registration Link (URL)</label>
+                <input
+                  type="url"
+                  value={eventForm.registrationLink}
+                  onChange={(e) => setEventForm({ ...eventForm, registrationLink: e.target.value })}
+                  placeholder="https://forms.gle/..."
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Banner Image URL</label>
+                <input
+                  type="url"
+                  value={eventForm.imageUrl}
+                  onChange={(e) => setEventForm({ ...eventForm, imageUrl: e.target.value })}
+                  placeholder="https://images.unsplash.com/..."
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsEventModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Create Event</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Gallery Modal */}
+      {isGalleryModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border shadow-xl rounded-2xl max-w-lg w-full p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <h3 className="font-bold text-lg text-foreground">Add Photo to Gallery</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsGalleryModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <form onSubmit={handleAddGalleryItem} className="space-y-4 pt-4">
+              <div>
+                <label className="text-xs font-semibold text-foreground">Image URL *</label>
+                <input
+                  type="url"
+                  value={galleryForm.imageUrl}
+                  onChange={(e) => setGalleryForm({ ...galleryForm, imageUrl: e.target.value })}
+                  placeholder="https://..."
+                  required
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Caption</label>
+                <input
+                  type="text"
+                  value={galleryForm.caption}
+                  onChange={(e) => setGalleryForm({ ...galleryForm, caption: e.target.value })}
+                  placeholder="e.g. Annual Fest 2026 performance"
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsGalleryModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Add Photo</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Achievement Modal */}
+      {isAchievementModalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border shadow-xl rounded-2xl max-w-lg w-full p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <h3 className="font-bold text-lg text-foreground">Add Achievement</h3>
+              <Button variant="ghost" size="sm" onClick={() => setIsAchievementModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <form onSubmit={handleAddAchievement} className="space-y-4 pt-4">
+              <div>
+                <label className="text-xs font-semibold text-foreground">Achievement Title *</label>
+                <input
+                  type="text"
+                  value={achievementForm.title}
+                  onChange={(e) => setAchievementForm({ ...achievementForm, title: e.target.value })}
+                  placeholder="e.g. 1st Place at National Hackathon"
+                  required
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Achievement Date *</label>
+                <input
+                  type="date"
+                  value={achievementForm.achievementDate}
+                  onChange={(e) => setAchievementForm({ ...achievementForm, achievementDate: e.target.value })}
+                  required
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-foreground">Description</label>
+                <textarea
+                  value={achievementForm.description}
+                  onChange={(e) => setAchievementForm({ ...achievementForm, description: e.target.value })}
+                  placeholder="Details about the prize or recognition..."
+                  rows={3}
+                  className="mt-1.5 w-full px-3.5 py-2 rounded-xl border border-input bg-background text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsAchievementModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Save Achievement</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

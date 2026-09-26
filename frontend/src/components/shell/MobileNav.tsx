@@ -122,6 +122,7 @@ const adminNav: NavGroup[] = [
     items: [
       { href: ROUTES.ADMIN_DASHBOARD, label: "Admin Console", icon: UserCog, exact: true },
       { href: ROUTES.ADMIN_USERS, label: "User Management", icon: Users },
+      { href: ROUTES.ADMIN_CLUBS, label: "Club Management", icon: Building },
       { href: ROUTES.ADMIN_MODERATION, label: "Moderation Desk", icon: ShieldAlert },
       { href: ROUTES.ADMIN_REPORTS, label: "Reports", icon: Flag },
       { href: ROUTES.ADMIN_SUPPORT, label: "Support Desk", icon: HelpCircle },

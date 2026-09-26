@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,7 +10,7 @@ import {
   Loader2,
   AlertCircle,
   ArrowLeft,
-  MailOpen,
+  CheckCircle2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -17,55 +18,83 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ROUTES } from "@/lib/constants";
+import { authApi } from "@/lib/api";
 
-// ─── Validation Schema ────────────────────────────────────────────────────────
+// ─── Validation Schemas ────────────────────────────────────────────────────────
 
-const forgotSchema = z.object({
+const emailSchema = z.object({
   email: z
     .string()
-    .min(1, "Email is required")
-    .email("Please enter a valid email address")
-    .refine(
-      (v) => v.toLowerCase().endsWith("@mlrit.ac.in"),
-      "Only @mlrit.ac.in institutional email addresses are allowed"
-    ),
+    .min(1, "Institutional email or username is required")
+    .trim(),
 });
 
-type ForgotSchema = z.infer<typeof forgotSchema>;
+const resetSchema = z
+  .object({
+    code: z
+      .string()
+      .min(6, "Verification code must be 6 digits")
+      .max(6, "Verification code must be 6 digits")
+      .regex(/^\d{6}$/, "Code must contain only 6 digits"),
+    newPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters long")
+      .max(100, "Password is too long"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
-// ─── Mock submit ──────────────────────────────────────────────────────────────
-
-async function mockForgotPassword(email: string): Promise<void> {
-  void email; // Intentionally unused — replace with real API call later
-  // Simulate API delay — replace with real Axios call later
-  await new Promise((r) => setTimeout(r, 900));
-  // Always succeeds in mock (don't leak whether email exists)
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+type EmailForm = z.infer<typeof emailSchema>;
+type ResetForm = z.infer<typeof resetSchema>;
 
 export default function ForgotPasswordPage() {
-  const [sent, setSent] = useState(false);
+  const router = useRouter();
+  const [step, setStep] = useState<"request" | "verify_and_reset" | "success">("request");
+  const [email, setEmail] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    getValues,
-    formState: { errors },
-  } = useForm<ForgotSchema>({
-    resolver: zodResolver(forgotSchema),
+  const emailForm = useForm<EmailForm>({
+    resolver: zodResolver(emailSchema),
   });
 
-  async function onSubmit(data: ForgotSchema) {
+  const resetForm = useForm<ResetForm>({
+    resolver: zodResolver(resetSchema),
+  });
+
+  async function onSendCode(data: EmailForm) {
     setIsSubmitting(true);
     setApiError(null);
     try {
-      await mockForgotPassword(data.email);
-      setSent(true);
-    } catch {
-      setApiError("Something went wrong. Please try again.");
+      const trimmedEmail = data.email.trim();
+      setEmail(trimmedEmail);
+      await authApi.forgotPassword(trimmedEmail);
+      setStep("verify_and_reset");
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setApiError(error.response?.data?.message || error.message || "Failed to send reset code. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function onResetPassword(data: ResetForm) {
+    setIsSubmitting(true);
+    setApiError(null);
+    try {
+      await authApi.resetPassword(
+        email,
+        data.code.trim(),
+        data.newPassword,
+        data.confirmPassword
+      );
+      setStep("success");
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
+      setApiError(error.response?.data?.message || error.message || "Failed to reset password. Please check your verification code.");
     } finally {
       setIsSubmitting(false);
     }
@@ -85,93 +114,71 @@ export default function ForgotPasswordPage() {
 
       {/* Header */}
       <div className="space-y-1.5">
-        <h1 className="text-2xl font-bold tracking-tight">Forgot password?</h1>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {step === "request" && "Forgot password?"}
+          {step === "verify_and_reset" && "Reset your password"}
+          {step === "success" && "Password Reset Successful"}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Enter your institutional email and we&apos;ll send a reset link.
+          {step === "request" && "Enter your institutional email or username to receive a 6-digit reset code."}
+          {step === "verify_and_reset" && `Enter the 6-digit code sent to your account and choose a new password.`}
+          {step === "success" && "Your password has been securely updated. You can now log in."}
         </p>
       </div>
 
-      {/* Success state */}
-      {sent ? (
-        <div className="space-y-6">
-          <div className="flex flex-col items-center gap-4 rounded-2xl border border-[var(--cn-emerald)]/30 bg-[var(--cn-emerald)]/10 px-6 py-8 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--cn-emerald)]/20">
-              <MailOpen className="h-7 w-7 text-[var(--cn-emerald)]" aria-hidden="true" />
-            </div>
-            <div className="space-y-1">
-              <p className="font-semibold text-foreground">Check your email</p>
-              <p className="text-sm text-muted-foreground">
-                If <span className="font-medium text-foreground">{getValues("email")}</span>{" "}
-                is registered, you will receive a password reset link shortly.
+      {/* Alert Error */}
+      {apiError && (
+        <Alert variant="destructive" role="alert" aria-live="assertive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{apiError}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* STEP 1: REQUEST CODE */}
+      {step === "request" && (
+        <form
+          onSubmit={emailForm.handleSubmit(onSendCode)}
+          className="space-y-4"
+          noValidate
+          aria-label="Password reset request form"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="forgot-email">Institutional Email / Username</Label>
+            <Input
+              id="forgot-email"
+              type="text"
+              autoComplete="email"
+              placeholder="student@mlrit.ac.in or username"
+              aria-describedby={emailForm.formState.errors.email ? "forgot-email-error" : undefined}
+              aria-invalid={!!emailForm.formState.errors.email}
+              {...emailForm.register("email")}
+            />
+            {emailForm.formState.errors.email && (
+              <p
+                id="forgot-email-error"
+                className="text-xs text-destructive"
+                role="alert"
+              >
+                {emailForm.formState.errors.email.message}
               </p>
-            </div>
+            )}
           </div>
-          <p className="text-center text-sm text-muted-foreground">
-            Didn&apos;t receive it?{" "}
-            <button
-              type="button"
-              onClick={() => setSent(false)}
-              className="font-medium text-[var(--cn-indigo)] hover:underline"
-            >
-              Try again
-            </button>
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Error */}
-          {apiError && (
-            <Alert variant="destructive" role="alert" aria-live="assertive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{apiError}</AlertDescription>
-            </Alert>
-          )}
 
-          {/* Form */}
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="space-y-4"
-            noValidate
-            aria-label="Password reset form"
+          <Button
+            type="submit"
+            className="w-full bg-[var(--cn-indigo)] hover:bg-[var(--cn-indigo)]/90 text-white"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
           >
-            <div className="space-y-1.5">
-              <Label htmlFor="forgot-email">Institutional Email</Label>
-              <Input
-                id="forgot-email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@mlrit.ac.in"
-                aria-describedby={errors.email ? "forgot-email-error" : undefined}
-                aria-invalid={!!errors.email}
-                {...register("email")}
-              />
-              {errors.email && (
-                <p
-                  id="forgot-email-error"
-                  className="text-xs text-destructive"
-                  role="alert"
-                >
-                  {errors.email.message}
-                </p>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-[var(--cn-indigo)] hover:bg-[var(--cn-indigo)]/90 text-white"
-              disabled={isSubmitting}
-              aria-busy={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending…
-                </>
-              ) : (
-                "Send Reset Link"
-              )}
-            </Button>
-          </form>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending code…
+              </>
+            ) : (
+              "Send Reset Code"
+            )}
+          </Button>
 
           <p className="text-center text-sm text-muted-foreground">
             Remember your password?{" "}
@@ -182,7 +189,121 @@ export default function ForgotPasswordPage() {
               Sign in
             </Link>
           </p>
-        </>
+        </form>
+      )}
+
+      {/* STEP 2: ENTER CODE & NEW PASSWORD */}
+      {step === "verify_and_reset" && (
+        <form
+          onSubmit={resetForm.handleSubmit(onResetPassword)}
+          className="space-y-4"
+          noValidate
+          aria-label="Set new password form"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="reset-code">6-Digit Verification Code</Label>
+            <Input
+              id="reset-code"
+              type="text"
+              maxLength={6}
+              placeholder="123456"
+              className="font-mono text-center tracking-widest text-lg"
+              {...resetForm.register("code")}
+            />
+            {resetForm.formState.errors.code && (
+              <p className="text-xs text-destructive">
+                {resetForm.formState.errors.code.message}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="new-password">New Password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              {...resetForm.register("newPassword")}
+            />
+            {resetForm.formState.errors.newPassword && (
+              <p className="text-xs text-destructive">
+                {resetForm.formState.errors.newPassword.message}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              {...resetForm.register("confirmPassword")}
+            />
+            {resetForm.formState.errors.confirmPassword && (
+              <p className="text-xs text-destructive">
+                {resetForm.formState.errors.confirmPassword.message}
+              </p>
+            )}
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full bg-[var(--cn-indigo)] hover:bg-[var(--cn-indigo)]/90 text-white"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Resetting password…
+              </>
+            ) : (
+              "Update Password"
+            )}
+          </Button>
+
+          <div className="text-center text-xs text-muted-foreground pt-1">
+            Didn&apos;t get a code?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setStep("request");
+                setApiError(null);
+              }}
+              className="font-medium text-[var(--cn-indigo)] hover:underline"
+            >
+              Request again
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* STEP 3: SUCCESS */}
+      {step === "success" && (
+        <div className="space-y-6">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-[var(--cn-emerald)]/30 bg-[var(--cn-emerald)]/10 px-6 py-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--cn-emerald)]/20">
+              <CheckCircle2 className="h-7 w-7 text-[var(--cn-emerald)]" aria-hidden="true" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-semibold text-foreground">Password Changed</p>
+              <p className="text-sm text-muted-foreground">
+                Your password has been successfully updated. You can now sign in with your new credentials.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={() => router.push(ROUTES.LOGIN)}
+            className="w-full bg-[var(--cn-indigo)] hover:bg-[var(--cn-indigo)]/90 text-white font-semibold"
+          >
+            Go to Sign In
+          </Button>
+        </div>
       )}
     </div>
   );

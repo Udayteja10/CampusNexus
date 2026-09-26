@@ -22,12 +22,7 @@ import { ROUTES } from "@/lib/constants";
 const loginSchema = z.object({
   email: z
     .string()
-    .min(1, "Email is required")
-    .email("Please enter a valid email address")
-    .refine(
-      (v) => v.toLowerCase().endsWith("@mlrit.ac.in"),
-      "Only @mlrit.ac.in institutional email addresses are allowed"
-    ),
+    .min(1, "Institutional email or username is required"),
   password: z.string().min(1, "Password is required"),
   rememberMe: z.boolean(),
 });
@@ -69,7 +64,11 @@ export default function LoginPage() {
 
   async function onSubmit(data: LoginSchema) {
     clearError();
-    await login(data.email, data.password, data.rememberMe);
+    try {
+      await login(data.email, data.password, data.rememberMe);
+    } catch {
+      // Error state is already stored in useAuthStore and rendered via the Alert banner
+    }
   }
 
   return (
@@ -91,7 +90,17 @@ export default function LoginPage() {
       {error && (
         <Alert variant="destructive" role="alert" aria-live="assertive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription className="flex flex-col gap-1.5">
+            <span>{error}</span>
+            {error.toLowerCase().includes("not verified") && (
+              <Link
+                href={`${ROUTES.VERIFY_EMAIL}?email=${encodeURIComponent(watch("email") || "")}`}
+                className="font-semibold underline underline-offset-2 hover:opacity-90 text-xs w-fit"
+              >
+                Verify your institutional email →
+              </Link>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -104,12 +113,12 @@ export default function LoginPage() {
       >
         {/* Email */}
         <div className="space-y-1.5">
-          <Label htmlFor="login-email">Institutional Email</Label>
+          <Label htmlFor="login-email">Institutional Email or Username</Label>
           <Input
             id="login-email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@mlrit.ac.in"
+            type="text"
+            autoComplete="username"
+            placeholder="you@mlrit.ac.in or username"
             aria-describedby={errors.email ? "email-error" : undefined}
             aria-invalid={!!errors.email}
             {...register("email")}

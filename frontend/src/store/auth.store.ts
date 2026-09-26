@@ -1,20 +1,25 @@
 /**
  * CampusNexus — Auth Store
  *
- * MOCK IMPLEMENTATION — Phase 2
- * Replace the `mockLogin` / `mockRegister` helpers with real Axios calls
- * to the Spring Boot API when the backend is ready. The store interface
- * (AuthState) must NOT change — only the inner async helpers.
+ * Real API integration with Spring Boot Backend /api/v1/auth
  */
 
 "use client";
 
 import { create } from "zustand";
-import type { User, UserRole } from "@/types/user.types";
+import axios from "axios";
+import { authApi } from "@/lib/api";
+import type {
+  HtnoValidationResponse,
+  RegisterRequest,
+  RegisterResponse,
+  User,
+  UserRole,
+  UsernameAvailabilityResponse,
+} from "@/types/user.types";
 
-// ─── Mock account seed data (dev-only) ───────────────────────────────────────
+// ─── Development Accounts Seed (for profile fallback & demo lookup) ──────────
 
-/** DO NOT expose passwords in UI. Passwords are intentionally omitted here. */
 export const MOCK_ACCOUNTS: Array<{
   email: string;
   role: UserRole;
@@ -24,48 +29,55 @@ export const MOCK_ACCOUNTS: Array<{
     email: "student@mlrit.ac.in",
     role: "STUDENT",
     user: {
-      id: "mock-student-001",
+      id: "1",
       username: "student_mlrit",
       email: "student@mlrit.ac.in",
-      fullName: "Alex Johnson",
+      fullName: "MLRIT Student",
+      emailVerified: true,
       role: "STUDENT",
-      department: "Computer Science & Engineering",
-      batch: "2022-2026",
+      department: "CSE",
+      htno: "23R21A0501",
+      admissionYear: 2023,
+      yearOfStudy: 4,
+      regulation: "R21",
+      batch: "2023-2027",
       isVerified: true,
       followersCount: 42,
       followingCount: 18,
       badges: [],
       clubLeaderOf: [],
-      createdAt: "2022-08-01T00:00:00Z",
+      createdAt: "2023-08-01T00:00:00Z",
     },
   },
   {
     email: "moderator@mlrit.ac.in",
     role: "MODERATOR",
     user: {
-      id: "mock-mod-001",
+      id: "2",
       username: "mod_mlrit",
       email: "moderator@mlrit.ac.in",
-      fullName: "Sam Patel",
+      fullName: "MLRIT Moderator",
+      emailVerified: true,
       role: "MODERATOR",
-      department: "Electronics & Communication Engineering",
-      batch: "2021-2025",
+      department: "ECE",
+      batch: "2022-2026",
       isVerified: true,
       followersCount: 87,
       followingCount: 35,
       badges: [],
       clubLeaderOf: [],
-      createdAt: "2021-08-01T00:00:00Z",
+      createdAt: "2022-08-01T00:00:00Z",
     },
   },
   {
     email: "admin@mlrit.ac.in",
     role: "ADMIN",
     user: {
-      id: "mock-admin-001",
+      id: "3",
       username: "admin_mlrit",
       email: "admin@mlrit.ac.in",
-      fullName: "Jordan Smith",
+      fullName: "MLRIT Administrator",
+      emailVerified: true,
       role: "ADMIN",
       department: "Administration",
       isVerified: true,
@@ -78,85 +90,27 @@ export const MOCK_ACCOUNTS: Array<{
   },
 ];
 
-// ─── Mock API helpers ─────────────────────────────────────────────────────────
-// When replacing with real API: swap these functions with Axios calls.
-// The store state and actions remain identical.
-
-const MOCK_PASSWORD = "campusnexus2024"; // single dev password for all mock accounts
-
-function simulateDelay(ms = 800) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-async function mockLogin(
-  email: string,
-  password: string
-): Promise<User> {
-  await simulateDelay(800);
-
-  const account = MOCK_ACCOUNTS.find(
-    (a) => a.email.toLowerCase() === email.toLowerCase()
-  );
-
-  if (!account || password !== MOCK_PASSWORD) {
-    throw new Error("Invalid email or password.");
-  }
-
-  return account.user;
-}
-
-async function mockRegister(data: {
-  fullName: string;
-  email: string;
-  password: string;
-}): Promise<User> {
-  await simulateDelay(1000);
-
-  if (!data.email.toLowerCase().endsWith("@mlrit.ac.in")) {
-    throw new Error("Only @mlrit.ac.in institutional email addresses are allowed.");
-  }
-
-  const existing = MOCK_ACCOUNTS.find(
-    (a) => a.email.toLowerCase() === data.email.toLowerCase()
-  );
-  if (existing) {
-    throw new Error("An account with this email already exists.");
-  }
-
-  // Return a newly-minted student user (not persisted in mock)
-  const newUser: User = {
-    id: `mock-new-${Date.now()}`,
-    username: data.email.split("@")[0].replace(/[^a-z0-9]/gi, "_"),
-    email: data.email,
-    fullName: data.fullName,
-    role: "STUDENT",
-    isVerified: false,
-    followersCount: 0,
-    followingCount: 0,
-    badges: [],
-    clubLeaderOf: [],
-    createdAt: new Date().toISOString(),
-  };
-
-  return newUser;
-}
-
 // ─── Persistence helpers ──────────────────────────────────────────────────────
 
 const STORAGE_KEY = "cn_auth_user";
+const TOKEN_KEY = "cn_jwt_token";
 
-function persistUser(user: User, remember: boolean) {
-  const json = JSON.stringify(user);
+function persistUser(user: User, token: string, remember: boolean) {
+  const userJson = JSON.stringify(user);
   if (remember) {
-    localStorage.setItem(STORAGE_KEY, json);
+    localStorage.setItem(STORAGE_KEY, userJson);
+    localStorage.setItem(TOKEN_KEY, token);
   } else {
-    sessionStorage.setItem(STORAGE_KEY, json);
+    sessionStorage.setItem(STORAGE_KEY, userJson);
+    sessionStorage.setItem(TOKEN_KEY, token);
   }
 }
 
 function clearPersistedUser() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 function loadPersistedUser(): User | null {
@@ -166,7 +120,6 @@ function loadPersistedUser(): User | null {
     const session = sessionStorage.getItem(STORAGE_KEY);
     if (session) return JSON.parse(session) as User;
   } catch {
-    // Corrupt storage — clear it
     clearPersistedUser();
   }
   return null;
@@ -177,6 +130,8 @@ function loadPersistedUser(): User | null {
 export interface AuthState {
   /** Currently authenticated user, or null if not logged in */
   user: User | null;
+  /** Active JWT authentication token */
+  token: string | null;
   /** Whether the user is authenticated */
   isAuthenticated: boolean;
   /** Loading state for async auth operations */
@@ -199,13 +154,28 @@ export interface AuthState {
 
   /**
    * Register a new student account.
-   * On success, the user is logged in and redirected to verify-email.
    */
-  register: (data: {
-    fullName: string;
-    email: string;
-    password: string;
-  }) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<RegisterResponse>;
+
+  /**
+   * Verify email via 6-digit OTP challenge.
+   */
+  verifyOtp: (email: string, otp: string) => Promise<void>;
+
+  /**
+   * Request resend of 6-digit OTP.
+   */
+  resendOtp: (email: string) => Promise<string>;
+
+  /**
+   * Live availability check for candidate username.
+   */
+  checkUsernameAvailability: (username: string) => Promise<UsernameAvailabilityResponse>;
+
+  /**
+   * Live validation of institutional HTNO.
+   */
+  validateHtno: (htno: string) => Promise<HtnoValidationResponse>;
 
   /** Log out and clear persisted session */
   logout: () => void;
@@ -214,12 +184,10 @@ export interface AuthState {
   clearError: () => void;
 
   /** Update current user's profile details */
-  updateProfile: (data: Partial<Pick<User, "fullName" | "bio" | "department" | "batch" | "avatarUrl">>) => void;
+  updateProfile: (data: Partial<Pick<User, "fullName" | "username" | "bio" | "department" | "batch" | "avatarUrl">>) => void;
 
   /**
    * Hydrate the store from persisted storage.
-   * Call once on app startup (in a client component or layout).
-   * Sets isHydrated=true when done so route guards know they can act.
    */
   hydrate: () => void;
 }
@@ -228,6 +196,7 @@ export interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  token: null,
   isAuthenticated: false,
   isLoading: false,
   error: null,
@@ -236,33 +205,104 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password, rememberMe = false) => {
     set({ isLoading: true, error: null });
     try {
-      const user = await mockLogin(email, password);
-      persistUser(user, rememberMe);
-      set({ user, isAuthenticated: true, isLoading: false });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred.";
-      set({ error: message, isLoading: false });
+      const response = await authApi.login({ email, password });
+      persistUser(response.user, response.token, rememberMe);
+      set({
+        user: response.user,
+        token: response.token,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (err: unknown) {
+      clearPersistedUser();
+      let message = "Invalid email or password.";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || err.response?.data?.error || err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      set({ user: null, token: null, isAuthenticated: false, error: message, isLoading: false });
+      throw new Error(message);
     }
   },
 
   register: async (data) => {
     set({ isLoading: true, error: null });
     try {
-      const user = await mockRegister(data);
-      // After registration, user is considered authenticated but unverified
-      persistUser(user, false);
-      set({ user, isAuthenticated: true, isLoading: false });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Registration failed. Please try again.";
+      const res = await authApi.register(data);
+      set({ isLoading: false });
+      return res;
+    } catch (err: unknown) {
+      let message = "Registration failed. Please verify your details.";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || err.response?.data?.error || err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
       set({ error: message, isLoading: false });
+      throw new Error(message);
+    }
+  },
+
+  verifyOtp: async (email, otp) => {
+    set({ isLoading: true, error: null });
+    try {
+      await authApi.verifyOtp(email, otp);
+      set({ isLoading: false });
+    } catch (err: unknown) {
+      let message = "Invalid verification code.";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || err.response?.data?.error || err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      set({ error: message, isLoading: false });
+      throw new Error(message);
+    }
+  },
+
+  resendOtp: async (email) => {
+    set({ isLoading: true, error: null });
+    try {
+      const msg = await authApi.resendOtp(email);
+      set({ isLoading: false });
+      return msg;
+    } catch (err: unknown) {
+      let message = "Failed to resend code.";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || err.response?.data?.error || err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      set({ error: message, isLoading: false });
+      throw new Error(message);
+    }
+  },
+
+  checkUsernameAvailability: async (username) => {
+    try {
+      return await authApi.checkUsernameAvailability(username);
+    } catch {
+      return { username, available: false, message: "Could not check username availability." };
+    }
+  },
+
+  validateHtno: async (htno) => {
+    try {
+      return await authApi.validateHtno(htno);
+    } catch {
+      return {
+        htno,
+        valid: false,
+        available: false,
+        message: "Unable to validate HTNO at this moment.",
+      };
     }
   },
 
   logout: () => {
     clearPersistedUser();
-    set({ user: null, isAuthenticated: false, error: null });
+    set({ user: null, token: null, isAuthenticated: false, error: null });
   },
 
   clearError: () => set({ error: null }),
@@ -272,20 +312,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!current) return;
     const updated: User = { ...current, ...data };
     if (typeof window !== "undefined") {
-      const local = localStorage.getItem(STORAGE_KEY);
-      if (local) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } else {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      }
+      const token =
+        localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || "";
+      const isLocal = !!localStorage.getItem(STORAGE_KEY);
+      persistUser(updated, token, isLocal);
     }
     set({ user: updated });
   },
 
   hydrate: () => {
     const user = loadPersistedUser();
-    if (user) {
-      set({ user, isAuthenticated: true, isHydrated: true });
+    let token: string | null = null;
+    if (typeof window !== "undefined") {
+      token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    }
+    if (user && token) {
+      set({ user, token, isAuthenticated: true, isHydrated: true });
+    } else if (user) {
+      set({ user, token: null, isAuthenticated: true, isHydrated: true });
     } else {
       set({ isHydrated: true });
     }
@@ -294,13 +338,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
 // ─── Selector helpers ─────────────────────────────────────────────────────────
 
-/** Returns the current user's role, or null if not authenticated */
 export const selectUserRole = (state: AuthState) => state.user?.role ?? null;
-
-/** Returns true if the user has at least MODERATOR privileges */
 export const selectIsModerator = (state: AuthState) =>
   state.user?.role === "MODERATOR" || state.user?.role === "ADMIN";
-
-/** Returns true if the user is an ADMIN */
 export const selectIsAdmin = (state: AuthState) =>
   state.user?.role === "ADMIN";

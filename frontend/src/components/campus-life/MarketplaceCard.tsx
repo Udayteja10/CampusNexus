@@ -59,7 +59,6 @@ export function MarketplaceCard({
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this listing?")) return;
     setLoadingAction(true);
     try {
       await campusLifeService.deleteMarketplaceListing(listing.id);

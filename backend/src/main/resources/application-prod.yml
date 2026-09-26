@@ -1,0 +1,9 @@
+# Production Profile Configuration
+logging:
+  level:
+    root: WARN
+    com.campusnexus: INFO
+    org.springframework.web: WARN
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}

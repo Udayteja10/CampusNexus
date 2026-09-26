@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "@/lib/toast";
 
 interface CommentListProps {
   postId: string;
@@ -172,7 +173,7 @@ export function CommentList({ postId }: CommentListProps) {
       store.decrementCommentCount(postId, data.length);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Failed to delete comment.";
-      alert(errMsg);
+      toast.error(errMsg);
     }
   };
 

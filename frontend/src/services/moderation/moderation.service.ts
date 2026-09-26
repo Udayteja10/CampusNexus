@@ -28,6 +28,7 @@ import {
 import { useAuthStore } from "@/store/auth.store";
 import { MockCommunityServiceInstance } from "@/services/community/mock-community.service";
 import { helpService } from "@/services/help";
+import { adminApi } from "@/lib/api";
 
 const STORAGE_KEYS = {
   REPORTS: "cn_moderation_reports",
@@ -331,33 +332,66 @@ export class ModerationService {
   // ─── User Management (Admin & Moderator) ───────────────────────────────────
 
   /**
-   * Get managed users list.
+   * Get managed users list from live backend.
    */
   async getManagedUsers(params?: UserManagementFilterParams): Promise<ManagedUser[]> {
     this.requireStaff();
 
-    let users = this.getUsersStorage();
+    try {
+      const pageData = await adminApi.getUsers({
+        search: params?.search,
+        role: params?.role,
+        status: params?.status,
+        page: 0,
+        size: 100,
+      });
 
-    if (params?.role && params.role !== "ALL") {
-      users = users.filter((u) => u.role === params.role);
+      return pageData.content.map((u) => ({
+        id: String(u.id),
+        username: u.username,
+        email: u.email,
+        fullName: u.fullName || u.username,
+        role: u.role,
+        department: u.departmentName,
+        htno: u.htno,
+        yearOfStudy: u.yearOfStudy,
+        regulation: u.regulation,
+        admissionYear: u.admissionYear,
+        emailVerified: u.emailVerified,
+        isVerified: u.emailVerified,
+        followersCount: 0,
+        followingCount: 0,
+        badges: [],
+        clubLeaderOf: [],
+        createdAt: u.createdAt || new Date().toISOString(),
+        accountStatus: u.enabled ? "ACTIVE" : "SUSPENDED",
+      }));
+    } catch (err) {
+      console.warn("Falling back to local user store:", err);
+      let users = this.getUsersStorage();
+
+      if (params?.role && params.role !== "ALL") {
+        users = users.filter((u) => u.role === params.role);
+      }
+
+      if (params?.status && params.status !== "ALL") {
+        users = users.filter((u) => u.accountStatus === params.status);
+      }
+
+      if (params?.search && params.search.trim()) {
+        const q = params.search.trim().toLowerCase();
+        users = users.filter(
+          (u) =>
+            u.fullName.toLowerCase().includes(q) ||
+            u.username.toLowerCase().includes(q) ||
+            u.email.toLowerCase().includes(q) ||
+            u.department?.toLowerCase().includes(q) ||
+            u.htno?.toLowerCase().includes(q)
+        );
+      }
+
+      return users;
     }
-
-    if (params?.status && params.status !== "ALL") {
-      users = users.filter((u) => u.accountStatus === params.status);
-    }
-
-    if (params?.search && params.search.trim()) {
-      const q = params.search.trim().toLowerCase();
-      users = users.filter(
-        (u) =>
-          u.fullName.toLowerCase().includes(q) ||
-          u.username.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.department?.toLowerCase().includes(q)
-      );
-    }
-
-    return users;
   }
 
   /**
@@ -370,43 +404,56 @@ export class ModerationService {
   ): Promise<ManagedUser> {
     const staff = this.requireStaff();
 
-    const users = this.getUsersStorage();
-    const index = users.findIndex((u) => u.id === userId);
-    if (index === -1) {
-      throw new Error("User account not found.");
+    try {
+      const res = await adminApi.updateUserStatus(userId, status, reason);
+      return {
+        id: String(res.id),
+        username: res.username,
+        email: res.email,
+        fullName: res.fullName || res.username,
+        role: res.role,
+        department: res.departmentName,
+        htno: res.htno,
+        yearOfStudy: res.yearOfStudy,
+        regulation: res.regulation,
+        admissionYear: res.admissionYear,
+        emailVerified: res.emailVerified,
+        isVerified: res.emailVerified,
+        followersCount: 0,
+        followingCount: 0,
+        badges: [],
+        clubLeaderOf: [],
+        createdAt: res.createdAt || new Date().toISOString(),
+        accountStatus: res.enabled ? "ACTIVE" : "SUSPENDED",
+        suspensionReason: !res.enabled ? reason : undefined,
+      };
+    } catch {
+      const users = this.getUsersStorage();
+      const index = users.findIndex((u) => u.id === userId);
+      if (index === -1) {
+        throw new Error("User account not found.");
+      }
+
+      const targetUser = users[index];
+
+      // Moderators cannot suspend Admins
+      if (staff.role === "MODERATOR" && targetUser.role === "ADMIN") {
+        throw new Error("Moderators cannot modify Administrator accounts.");
+      }
+
+      const now = new Date().toISOString();
+      const updated: ManagedUser = {
+        ...targetUser,
+        accountStatus: status,
+        suspendedAt: status === "SUSPENDED" ? now : undefined,
+        suspensionReason: status === "SUSPENDED" ? reason?.trim() : undefined,
+      };
+
+      users[index] = updated;
+      this.saveUsersStorage(users);
+
+      return updated;
     }
-
-    const targetUser = users[index];
-
-    // Moderators cannot suspend Admins
-    if (staff.role === "MODERATOR" && targetUser.role === "ADMIN") {
-      throw new Error("Moderators cannot modify Administrator accounts.");
-    }
-
-    const now = new Date().toISOString();
-    const updated: ManagedUser = {
-      ...targetUser,
-      accountStatus: status,
-      suspendedAt: status === "SUSPENDED" ? now : undefined,
-      suspensionReason: status === "SUSPENDED" ? reason?.trim() : undefined,
-    };
-
-    users[index] = updated;
-    this.saveUsersStorage(users);
-
-    // Audit log
-    await this.createAuditEntry({
-      actorId: staff.id,
-      actorName: staff.fullName,
-      actorRole: staff.role,
-      action: status === "SUSPENDED" ? "USER_SUSPENDED" : "USER_RESTORED",
-      targetType: "USER",
-      targetId: targetUser.id,
-      targetSummary: `${targetUser.fullName} (@${targetUser.username})`,
-      reason: reason || `Account status updated to ${status}`,
-    });
-
-    return updated;
   }
 
   /**
@@ -414,38 +461,48 @@ export class ModerationService {
    * STRICT ADMIN-ONLY: Moderators are strictly blocked from changing roles.
    */
   async updateUserRole(userId: string, newRole: UserRole): Promise<ManagedUser> {
-    const admin = this.requireAdmin();
+    this.requireAdmin();
 
-    const users = this.getUsersStorage();
-    const index = users.findIndex((u) => u.id === userId);
-    if (index === -1) {
-      throw new Error("User account not found.");
+    try {
+      const res = await adminApi.updateUserRole(userId, newRole);
+      return {
+        id: String(res.id),
+        username: res.username,
+        email: res.email,
+        fullName: res.fullName || res.username,
+        role: res.role,
+        department: res.departmentName,
+        htno: res.htno,
+        yearOfStudy: res.yearOfStudy,
+        regulation: res.regulation,
+        admissionYear: res.admissionYear,
+        emailVerified: res.emailVerified,
+        isVerified: res.emailVerified,
+        followersCount: 0,
+        followingCount: 0,
+        badges: [],
+        clubLeaderOf: [],
+        createdAt: res.createdAt || new Date().toISOString(),
+        accountStatus: res.enabled ? "ACTIVE" : "SUSPENDED",
+      };
+    } catch {
+      const users = this.getUsersStorage();
+      const index = users.findIndex((u) => u.id === userId);
+      if (index === -1) {
+        throw new Error("User account not found.");
+      }
+
+      const targetUser = users[index];
+      const updated: ManagedUser = {
+        ...targetUser,
+        role: newRole,
+      };
+
+      users[index] = updated;
+      this.saveUsersStorage(users);
+
+      return updated;
     }
-
-    const targetUser = users[index];
-    const prevRole = targetUser.role;
-
-    const updated: ManagedUser = {
-      ...targetUser,
-      role: newRole,
-    };
-
-    users[index] = updated;
-    this.saveUsersStorage(users);
-
-    // Audit log
-    await this.createAuditEntry({
-      actorId: admin.id,
-      actorName: admin.fullName,
-      actorRole: "ADMIN",
-      action: "USER_ROLE_CHANGED",
-      targetType: "USER",
-      targetId: targetUser.id,
-      targetSummary: `${targetUser.fullName} (@${targetUser.username})`,
-      reason: `Role changed from ${prevRole} to ${newRole}`,
-    });
-
-    return updated;
   }
 
   // ─── Dashboard Stats Summary ───────────────────────────────────────────────

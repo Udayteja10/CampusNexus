@@ -29,7 +29,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   return (
     <>
       <header
-        className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border/60 bg-background/90 px-4 backdrop-blur-md sm:px-6"
+        className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border bg-header/95 px-4 backdrop-blur-md sm:px-6"
         role="banner"
       >
         {/* Mobile menu trigger */}
@@ -73,7 +73,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Global search"
-            className="h-9 pl-9 text-sm bg-muted/40 border-border/60 focus-visible:bg-background"
+            className="h-9 pl-9 text-sm bg-input-bg/70 border-border focus-visible:bg-card focus-visible:border-ring"
           />
         </form>
 

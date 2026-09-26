@@ -22,6 +22,7 @@ export const ROUTES = {
 
   // App core
   DASHBOARD: "/dashboard",
+  CHAT: "/chat",
   PROFILE: (username: string) => `/profile/${username}`,
   NOTIFICATIONS: "/notifications",
   SEARCH: "/search",

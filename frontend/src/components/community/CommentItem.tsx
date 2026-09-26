@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ReportDialog } from "./ReportDialog";
 import { ROUTES } from "@/lib/constants";
+import { toast } from "@/lib/toast";
 
 interface CommentItemProps {
   comment: Comment;
@@ -69,15 +70,15 @@ export function CommentItem({
   const timeAgo = formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true });
 
   const handleDelete = async () => {
-    if (window.confirm("Are you sure you want to delete this comment?")) {
-      setDeleting(true);
-      try {
-        await onDelete(comment.id);
-      } catch (err) {
-        console.error("Failed to delete comment:", err);
-      } finally {
-        setDeleting(false);
-      }
+    setDeleting(true);
+    try {
+      await onDelete(comment.id);
+      toast.success("Comment deleted.");
+    } catch (err) {
+      console.error("Failed to delete comment:", err);
+      toast.error("Failed to delete comment.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -91,9 +92,10 @@ export function CommentItem({
       setReplyContent("");
       setReplyAnonymous(false);
       setShowReplyInput(false);
+      toast.success("Reply submitted.");
     } catch (err) {
       console.error("Failed to submit reply:", err);
-      alert("Failed to submit reply. Please try again.");
+      toast.error("Failed to submit reply. Please try again.");
     } finally {
       setSubmittingReply(false);
     }
