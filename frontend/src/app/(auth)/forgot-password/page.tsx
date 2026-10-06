@@ -7,6 +7,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
+  Eye,
+  EyeOff,
   Loader2,
   AlertCircle,
   ArrowLeft,
@@ -56,6 +58,8 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const emailForm = useForm<EmailForm>({
     resolver: zodResolver(emailSchema),
@@ -219,15 +223,32 @@ export default function ForgotPasswordPage() {
 
           <div className="space-y-1.5">
             <Label htmlFor="new-password">New Password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              autoComplete="new-password"
-              placeholder="••••••••"
-              {...resetForm.register("newPassword")}
-            />
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showNewPassword ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                className="pr-10"
+                aria-describedby={resetForm.formState.errors.newPassword ? "new-password-error" : undefined}
+                aria-invalid={!!resetForm.formState.errors.newPassword}
+                {...resetForm.register("newPassword")}
+              />
+              <button
+                type="button"
+                aria-label={showNewPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowNewPassword((p) => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+              >
+                {showNewPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {resetForm.formState.errors.newPassword && (
-              <p className="text-xs text-destructive">
+              <p id="new-password-error" className="text-xs text-destructive" role="alert">
                 {resetForm.formState.errors.newPassword.message}
               </p>
             )}
@@ -235,15 +256,32 @@ export default function ForgotPasswordPage() {
 
           <div className="space-y-1.5">
             <Label htmlFor="confirm-password">Confirm New Password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              autoComplete="new-password"
-              placeholder="••••••••"
-              {...resetForm.register("confirmPassword")}
-            />
+            <div className="relative">
+              <Input
+                id="confirm-password"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                className="pr-10"
+                aria-describedby={resetForm.formState.errors.confirmPassword ? "confirm-password-error" : undefined}
+                aria-invalid={!!resetForm.formState.errors.confirmPassword}
+                {...resetForm.register("confirmPassword")}
+              />
+              <button
+                type="button"
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowConfirmPassword((p) => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {resetForm.formState.errors.confirmPassword && (
-              <p className="text-xs text-destructive">
+              <p id="confirm-password-error" className="text-xs text-destructive" role="alert">
                 {resetForm.formState.errors.confirmPassword.message}
               </p>
             )}
